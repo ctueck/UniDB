@@ -304,7 +304,7 @@ UniDB.prototype.menu = function () {
 						category = description.substr(0, description.indexOf(":")).trimRight();
 						description = description.substr(description.indexOf(":")+1).trimLeft();
 					}
-					$( "<a/>", { html: D.stripText(description) })
+					$( "<a/>", { html: D.stripText(description, true) })
 						.appendTo(entry)
 						.on("click",function() {
 							tableObject.reset();

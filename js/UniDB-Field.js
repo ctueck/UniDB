@@ -132,7 +132,7 @@ Field.prototype.showField = function(target) {
 			for (var i = 0; i < this.options.length; i++) {
 				var option = $("<option/>", {
 					value:	( this.options[i][0] ? this.options[i][0] : "NULL" ),
-					text:	this.D.stripText(this.options[i][1], true)
+					text:	this.options[i][1]
 				});
 				if (this.oldValue == this.options[i][0]) {
 					option.prop("selected","selected");
