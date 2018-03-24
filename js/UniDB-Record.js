@@ -25,14 +25,13 @@ Record.prototype.initialise = function (callback) {
 	var options = {};
 
 	if (this.key != undefined) {		// we have a Record object for an existing record
-		options[this.keyColumn] = this.key; // primary key column name = primary key column value
-		cmd = "editRecord";
+		options["key"] = this.keyColumn; // primary key column name = primary key column value
+		//options[this.keyColumn] = this.key; // primary key column name = primary key column value
 	} else {
-		cmd = "newRecord";
 	}
 
 	// now we load the record / a blank form from the server:
-	this.T.D.cmd(cmd, this.T.tableName, options, function (data) {
+	this.T.D.cmd("GET", "/table/" + this.T.tableName + "/" + (this.key ? this.key : "-") , options, function (data) {
 		R.priKeyValue = data.fieldset[R.T.priKey].value;
 		R.related = data.related;
 		// now we iterate over the columns, and initialise Field objects

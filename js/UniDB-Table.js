@@ -46,7 +46,7 @@ Table.prototype.show = function () {
 	// set UniDB Object's current Table to this one
 	T.D.currentTable = this;
 	// run query
-	T.D.cmd('show', T.tableName, T.options, function (data) {
+	T.D.cmd('GET', '/table/' + T.tableName, T.options, function (data) {
 		// empty the content area and table-specific toolbars
 		$("#content").text("");
 		$("#tableinfo").text("");
@@ -296,7 +296,7 @@ Table.prototype.deleteFunction = function (evnt) {
 	var options = {};
 	options[T.priKey] = evnt.data.value;
 	window.confirm("Are you sure you want to delete " + (evnt.data.name ? evnt.data.name : evnt.data.value)+"?")
-		&& T.D.cmd("deleteRecord", T.tableName, options, function () {
+		&& T.D.cmd("DELETE", "/table/" + T.tableName + "/" + evnt.data.value, options, function () {
 			T.show();	// afterwards, refresh the current view
 		} );
 	if (typeof evnt.stopPropagation === "function") { 

@@ -89,8 +89,6 @@ class Column {
 		+-----------------------+-----------------------+-----------------------+
 		| year			| year			| year			|
 		+-----------------------+-----------------------+-----------------------+
-		| (only via config)	| readonly		| readonly		|
-		+-----------------------+-----------------------+-----------------------+
 		| timestamp		| timestamp		| readonly		|
 		+-----------------------+-----------------------+-----------------------+
 		*/
@@ -158,16 +156,14 @@ class Column {
 				$this->fe_size = 4;
 				$this->placeholder = $this->placeholder ? $this->placeholder : "YYYY";
 				break;
-			case 'readonly':        
-				$this->fe_type = "readonly";
-				$this->fe_size = $this->D->conf("maxinputsize");
-				break;
 			case 'timestamp':	
 				$this->fe_type = "readonly";
 				$this->fe_size = 20;
 				break;
+			/*case '':	
+				break;*/
 			default:
-				$this->D->log("Warning: data type ".$this->data_type." is unsupported.");
+				$this->D->log("Warning: data type ".$row['data_type']." is unsupported.");
 				break;
 		}
 
@@ -251,18 +247,11 @@ class Column {
 		}
 	}
 
-	public function fieldset ($value, $fullRecord = null) {
+	public function fieldset ($value) {
 		/* return fieldset to be passed to forms */
 		$fieldset = array();
 		$fieldset["value"] = $value;
 		$fieldset["label"] = $this->description;
-		// prepare replTable from fullRecord for use by strtr()
-		if ( is_array($fullRecord) ) {
-			$replTable = array();
-			foreach ($fullRecord as $other_field => $other_value) {
-				$replTable['%%'.$other_field.'%%'] = $other_value;
-			}
-		}
 		// mark if this is the record name (used e.g. as dialog title)
 		if ($this->name == $this->T->defName) {
 			$fieldset["isName"] = true;
@@ -277,12 +266,8 @@ class Column {
 				$query =	'SELECT '.$this->foreign_key.' AS fkey, '.
 						$this->D->T($this->foreign_table)->defName.' AS fvalue '.
 						' FROM '.$this->foreign_table.
-						( isset($this->foreign_select_condition)        // use condition, if exits
-						? ' WHERE ('. ( is_array($fullRecord)           // apply replacement, if given
-						  ? strtr($this->foreign_select_condition, $replTable)
-						  : $this->foreign_select_condition )
-						.') OR ( '.$this->foreign_key.' = '.$this->D->dbh->quote($value).' )'
-						: '' ).
+						( isset($this->foreign_select_condition) ? ' WHERE ('.$this->foreign_select_condition.')'.
+						' OR ( '.$this->foreign_key.' = '.$this->D->dbh->quote($value).' )' : '' ).
 						' ORDER BY fvalue';
 				$fkl = $this->D->dbh->query($query);
 				if (PEAR::isError($fkl)) {

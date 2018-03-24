@@ -294,6 +294,31 @@ class Table {
 		return($matchList);
 	}
 
+	
+	/*************************************** API routing functions **********************************************/
+
+	public function api_get ($Id, $options) {
+		if (empty($Id)) {
+			return($this->show($options));
+		} elseif ($Id == '-') {
+			return($this->newRecord());
+		} else {
+			return($this->editRecord($Id, isset($options["key"]) ? $options["key"] : null ) );
+		}
+	}
+
+	public function api_put ($Id, $options) {
+		return($this->saveRecord($Id, $options));
+	}
+
+	public function api_delete ($Id, $options) {
+		if (empty($Id)) {
+			$this->D->log("DELETE is only allowed on single records.", true);
+		} else {
+			return($this->deleteRecord($Id));
+		}
+	}
+
 	/*************************************** external functions *************************************************/
 	/* returning data in JSON format                                                                            */
 
@@ -332,21 +357,23 @@ class Table {
 	}
 
 	/* edit/view record with primary key = $key */
-	public function editRecord ($options) {
+	public function editRecord ($value, $key = null) {
 
-		if (isset($options[$this->priKey])) {	// "normal" case: primary key used to identify record
-			$where = $this->tableName.".".$this->priKey." = ".$this->D->dbh->quote($options[$this->priKey]);
-		} else {				// alternative: check if any UNIQUE key is given
-			foreach ($this->Columns as $c) {
-				if ($c->unique && isset($options[$c->name])) {
-					$where = $this->tableName.".".$c->name." = ".$this->D->dbh->quote($options[$c->name]);
-				}
+		if (isset($key) && ($key != $this->priKey) ) {	// we were given a specific key other than the PRIMARY KEY
+			// need to check if it exits and is UNIQUE before we use it
+			if ($this->C($key) && $this->C($key)->unique) {
+				$where = $this->tableName.".".$key." = ".$this->D->dbh->quote($value);
+			} else {
+				$this->D->log("Tried to load record identified by '$key', but column ".
+				( $this->C($key) ? "is not UNIQUE." : "does not exist." ), true);
 			}
+		} else {		// "normal" case: primary key used to identify record
+			$where = $this->tableName.".".$this->priKey." = ".$this->D->dbh->quote($value);
 		}
 
-		if (!isset($where)) {
+		/*if (!isset($where)) {
 			$this->D->log("no PRIMARY or UNIQUE key specified",true);
-		}
+		}*/
 
 		$this->D->log("Loading record ".$this->tableName."(".$where.")");
 
@@ -367,8 +394,8 @@ class Table {
 		return($this->showForm($r));
 	}
 
-	/* create a new record */
-	public function newRecord ($options) {
+	/* return an empty form to create a new record */
+	public function newRecord () {
 
 		if (!$this->allowNew) {
 			$this->D->log("creating new records is not allowed for this table",true);
@@ -392,7 +419,7 @@ class Table {
 		// all column info
 		foreach ($r as $field => $value) {
 			if ($this->C($field)) {
-				$fieldset[$field] = $this->C($field)->fieldset($value, $r);
+				$fieldset[$field] = $this->C($field)->fieldset($value);
 			} else {
 				$this->D->log("Record contains unknown column '$field'. Probably the data structure changed since you logged in, please log out and relogin.", true);
 			}
@@ -408,9 +435,9 @@ class Table {
 	} // function showForm()
 
 	/* save a new or existing record */
-	public function saveRecord ($options) {
+	public function saveRecord ($Id, $options) {
 
-		if (isset($options[$this->priKey])) {		// saving an existing record
+		if (isset($Id)) {		// saving an existing record
 
 			if (!$this->allowEdit) {
 				$this->D->log("editing not allowed on this table",true);
@@ -419,14 +446,15 @@ class Table {
 			$query = "UPDATE $this->tableName SET ";
 
 			foreach ($this->Columns as $column) {
-				if ( ($column->name != $this->priKey) && ($column->data_type != 'timestamp') ) {
-					if (isset($options[$column->name])) {
+				// we'll update all columns that are not PRIMARY KEYS, not timestamps and that are actually supplied
+				if ( ($column->name != $this->priKey)
+					&& ($column->data_type != 'timestamp')
+					&& isset($options[$column->name]) ) {
 						$query .= $column->name . " = " . $this->D->dbh->quote($options[$column->name]) . ", ";
-					}
 				}
 			}
 			$query = substr($query,0,-2);	// cut off trailing ", "
-			$query .= " WHERE $this->priKey = ".$this->D->dbh->quote($options[$this->priKey]);
+			$query .= " WHERE $this->priKey = ".$this->D->dbh->quote($Id);
 		
 			$this->D->dbh->setLimit(1);	// precaution only
 
@@ -447,7 +475,7 @@ class Table {
 					if (isset($options[$column->name])) {
 						$insertValues[] = $this->D->dbh->quote($options[$column->name]);
 					} else {
-						$insertValues[] = $this->D->dbh->quote(0);
+						$insertValues[] = "NULL";
 					}
 				}
 			}
@@ -468,30 +496,30 @@ class Table {
 		    b. clicked apply/ok without any changes
 		   in case of a. error will occur in next step, trying to editRecord. thus, no problem that this cannot be caught here */
 
-		if (!isset($options[$this->priKey])) {		// this was a new record
-			$options[$this->priKey] = $this->D->dbh->lastInsertID();
-			if (PEAR::isError($options[$this->priKey])) {
-				$this->D->log("Insert failed - ".$options[$this->priKey]->getMessage()."\n\n".$options[$this->priKey]->getUserinfo(),true);
+		if (!isset($Id)) {		// this was a new record
+			$Id = $this->D->dbh->lastInsertID();
+			if (PEAR::isError($Id)) {
+				$this->D->log("Insert failed - ".$Id->getMessage()."\n\n".$Id->getUserinfo(),true);
 			}
 		}
 
 		// return the PRIMARY KEY
-		return(array(	$this->priKey => $options[$this->priKey]));
+		return(array(	$this->priKey => $Id));
 
 	} /* function saveRecord() */
 	
 	/* delete a record */
-	public function deleteRecord ($options) {
+	public function deleteRecord ($Id) {
 
 		if (! $this->allowDelete) {
 			$this->D->log("deleting not allowed for this table",true);
 		}
 
-		if (!isset($options[$this->priKey])) {		// key not specified -> die()
+		if (!isset($Id)) {		// key not specified -> die()
 			$this->D->log("record not specified",true);
 		}
 
-		$query = "DELETE FROM $this->tableName WHERE $this->priKey = ".$this->D->dbh->quote($options[$this->priKey]);
+		$query = "DELETE FROM $this->tableName WHERE $this->priKey = ".$this->D->dbh->quote($Id);
 		$this->D->dbh->setLimit(1);	// precaution only
 
 		$r = $this->D->dbh->exec($query);
@@ -503,7 +531,7 @@ class Table {
 		$this->D->log($this->D->dbh->last_query.' // '.$r.' row(s) affected');
 
 		if ($r == 0) {
-			$this->D->log("It appears nothing could be deleted - maybe someone else did?",true);
+			$this->D->log("It appears nothing could be deleted - maybe someone else did?", "404 Not found");
 		}
 
 		// return an empty object as JSON data

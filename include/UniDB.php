@@ -192,7 +192,14 @@ class UniDB {
 			$this->Debug = "[...]\n\n".substr($this->Debug, -$this->conf("logsize"));
 		}
 		if ($fatal) {
+			// add error to log
 			$this->Debug .= '<span style="color: red;">Fatal error: '. $msg . "</span>\n";
+			// if fatal is a string, use it as HTTP error code & text
+			if (is_string($fatal)) {
+				header("HTTP/1.1 $fatal");
+			} else {
+				header("HTTP/1.1 500 Undefined fatal error");	// otherwise, default
+			}
 			// return the last error as JSON object (full log should be retrieved via $this->printLog() ) 
 			header("Content-type: application/json");
 			die(json_encode(array(	"UniDB_fatalError" =>	$msg)));
@@ -276,38 +283,47 @@ class UniDB {
 		return($query);
 	}
 
-	public function execCmd () {
+	public function execCmd ($Method, $Section, $Object, $Id) {
 	/* execute a command specified in the query string, either from UniDB object or Table object */
+
 		// we can use either GET or POST
-		$options = isset($_GET['__UniDB']) ? $_GET : ( isset($_POST['__UniDB']) ? $_POST : null );
-		// get command
-		$cmd	= isset($options['__UniDB']) ? $options['__UniDB'] : null;
-		$table	= isset($options['__table']) ? $options['__table'] : null;
+		if ($Method == "GET") {
+			$options = $_GET;
+		} else {
+			$options = json_decode(file_get_contents("php://input"), true);
+		}
 
 		// log the whole array
 		//$this->log("execCmd: ".print_r($options,true));
 
-		if (isset($cmd) && isset($table)) {	// it's related to a Table or Query object
-			if (isset($this->Tables[$table]) && is_callable(array($this->T($table),$cmd))) {
-				$this->log("Calling: (UniDB)->T($table)->$cmd");
-				$returnData = $this->T($table)->$cmd($options);
-			} elseif (isset($this->Queries[$table]) && is_callable(array($this->Queries[$table],$cmd))) {
-				$this->log("Calling: (UniDB)->Queries[$table]->$cmd");
-				$returnData = $this->Queries[$table]->$cmd($options);
+		$call_object = null;
+		$call_function = null;
+
+		switch ($Section) {
+			case 'table':
+				$call_object = ( isset($this->Tables[$Object]) ? $this->T($Object) : null );
+				$call_function = strtolower("api_".$Method);
+				break;
+			case 'query':
+				$call_object = ( isset($this->Queries[$table]) ? $this->Queries[$table] : null );
+				$call_function = strtolower("api_".$Method);
+				break;
+			case 'system':
+				$call_object = $this;
+				$call_function = strtolower($Method.'_'.$Object);
+				break;
+		}
+
+		if ( isset($call_object) ) {
+			if (isset($call_function) && is_callable(array($call_object,$call_function))) {
+				$this->log("Calling: (".get_class($call_object).")".$Object."->$call_function(Id=".(isset($Id)?$Id:"NULL").")");
+				$returnData = $call_object->$call_function($Id, $options);
 			} else {
-				$this->log("Invalid UniDB command: $cmd", true);
-			}
-		} else if (isset($cmd)) {		// it's an UniDB object method
-			if ($cmd == "execCmd") {
-				$this->log("Recursion detected: calling 'execCmd' is not allowed.", true);
-			} elseif (is_callable(array($this,$cmd))) {
-				$this->log("Calling: (UniDB)->$cmd");
-				$returnData = $this->$cmd($options);
-			} else {
-				$this->log("Invalid UniDB command: $cmd", true);
+				$this->log("$call_function not implemented: $Method $Section/$Object/$Id", "404 Not found");
+				$returnData = array();
 			}
 		} else {				// no command - we just return an empty object
-			$this->log("No UniDB command given, or no table specified in GET or POST.");
+			$this->log("no route to PHP object: $Method $Section/$Object/$Id", "404 Not found");
 			$returnData = array();
 		}
 
@@ -336,13 +352,13 @@ class UniDB {
 	/*************************************** external functions *************************************************/
 	/* returning data in JSON format                                                                            */
 
-	public function printLog() {
+	public function get_log() {
 		$log = $this->Debug;
 		$this->Debug = "";
 		return(array("UniDB_log" => $log));
 	}
 
-	public function getTables() {
+	public function get_tables() {
 		$tables = array();
 		foreach ($this->Tables as $name => $t) {
 			$tables[$name] = $t->getInfo();
@@ -352,7 +368,7 @@ class UniDB {
 				"tables" =>	$tables ));
 	}
 
-	public function getQueries($options) {
+	public function get_queries($Id, $options) {
 		if (isset($options["mtime"])) {
 			$mtime = $options["mtime"];
 		} else {
@@ -372,7 +388,7 @@ class UniDB {
 				"queries" =>	( count($queries) > 0 ? $queries : null ) ) );
 	}
 
-	public function newSimpleQuery($options) {
+	public function put_query($Id, $options) {
 		// create an ad-hoc Query
 		$newQuery = new SimpleQuery($this, $options);
 		$this->Queries[$newQuery->name] = $newQuery;
@@ -382,7 +398,7 @@ class UniDB {
 				"info" =>	$newQuery->getInfo() ) );
 	}
 
-	public function search($options) {
+	public function get_search($Id, $options) {
 		$matchList = array();
 		foreach ($this->Tables as $name => $t) {
 			$matchList = array_merge($matchList,$t->search($options));
