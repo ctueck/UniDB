@@ -1,0 +1,342 @@
+/* main window */
+body {
+	font-family: Verdana,Arial,sans-serif/*{ffDefault}*/;
+	font-size: 10pt;
+	padding: 0;
+	margin: 0;
+	background: #E4E9F1;
+	color: #222222;
+}
+
+b,strong {
+	color: #10447D;
+}
+
+/* menu bar:
+/*
+/* +--------------------------------------------+---------------+
+/* | #menu                                      | #motd         |
+/* +-------------------+--------------------+---+---------------+
+/* | #tableinfo        | #navbar            | #searchbar        |
+/* +-------------------+--------------------+-------------------+ */
+
+div#menu_bar {
+	position: fixed;
+	top: 0px;
+	left: 0px;
+	z-index: 2;
+	width: 100%;
+	height: 68px;
+	padding: 0;
+	margin: 0;
+	background: #92A4C4;
+}
+div#menu {
+	position: absolute;
+	top: 0px;
+	left: 0px;
+	width: 80%;
+	height: 30px;
+	padding: 2px 0 0 2px;
+}
+ul#menuTables {
+	position: absolute;
+	z-index: 3;
+}
+ul#menuQueries {
+	position: absolute;
+	z-index: 3;
+}
+div#motd {
+	position: absolute;
+	top: 0px;
+	left: 80%;
+	width: 20%;
+	height: 25px;
+	padding: 5px 5px 0 0;
+	font-weight: bold;
+	font-size: 80%;
+	text-align: right;
+}
+div#tableinfo {
+	position: absolute;
+	top: 35px;
+	left: 0px;
+	width: 33%;
+	height: 25px;
+	padding: 5px 0 0 5px;
+	text-align: left;
+	font-weight: bold;
+	font-size: 80%;
+}
+div#navbar {
+	position: absolute;
+	top: 33px;
+	left: 33%;
+	width: 33%;
+	height: 30px;
+	padding: 0;
+	text-align: center;
+}
+div#searchbar {
+	position: absolute;
+	top: 35px;
+	left: 67%;
+	width: 33%;
+	height: 30px;
+	text-align: right;
+	padding: 0 5px 0 0;
+}
+form#search_form {
+	display: inline;
+}
+form#downloadOneForm {
+	display: none;
+}
+
+/* menus */
+div#menu ul.ui-menu {
+	min-width: 250px;
+}
+div#menu ul.ui-menu.small {
+	min-width: 25px;
+}
+
+/* content area */
+div#content_container {
+	width: 100%;
+	height: 100%;
+	position: fixed;
+	top: 0px;
+	z-index: 1;
+	border: none;
+	clear: both;
+	overflow: scroll;
+}
+div#content_spacer {
+	height: 65px;
+}
+
+/* autocomplete (global search on home screen) */
+div#global_search {
+	text-align: center;
+	padding-top: 50px;
+}
+div#global_search input#search_term {
+	width: 35%;
+	font-size: 125%;
+}
+
+ul.ui-autocomplete {
+	width: 40%;
+	list-style: none;
+	padding-bottom: 10px;
+}
+
+ul.ui-autocomplete li.ui-autocomplete-category {
+	font-weight: bold;
+	margin: .8em 0 .2em .5em;
+	line-height: 1.5;
+}
+ul.ui-autocomplete li.ui-menu-item {
+	margin: 0 0 0 1.5em;
+}
+.ui-autocomplete-loading {
+	background: white url('jquery-ui/images/ui-anim_basic_16x16.gif') right center no-repeat;
+}
+
+/* ad hoc sql */
+div#adhoc_query {
+	text-align: center;
+	padding-top: 50px;
+}
+div#adhoc_query input#adhoc_sql {
+	width: 35%;
+	font-size: 100%;
+}
+
+/* debug/log window */
+
+pre#debug { 
+	white-space: pre-wrap;
+	grid-column: 1 / 5;
+}
+
+/* list table */
+table {
+	width: 100%;
+	border-collapse: collapse;
+}
+th, td {
+	white-space: nowrap;
+	overflow: hidden;
+}
+th:first-child, td:first-child {
+	padding-left: 10px;
+}
+tr {
+	height: 29px;
+}
+tr:nth-child(even) {
+	background: #ffffff;
+}
+tr.selected {
+	background: #395E93;
+	color: #fff;
+}
+th {
+	color: #10447D;
+	font-size: 100%;
+	text-align: left;
+}
+th .sort-button {
+	background-color: transparent ! important;
+	border: none ! important;
+	padding-left: 0px;
+	margin-left: 0px;
+	font-size: 100% ! important;
+	font-weight: bold ! important;
+	color: #10447d;
+}
+th.column-sorted .sort-button , th:HOVER .sort-button {
+	text-decoration: underline;
+}
+.sort-button .ui-icon {
+	background-image: url(jquery-ui/images/ui-icons_10447d_256x240.png);
+}
+.sort-button .ui-button-text {
+	padding-left: 0px;
+}
+td {
+	padding: 0 5px 0 2px;
+}
+td.edit-delete-buttons {
+	width: 50px;
+}
+
+span.sql-null {
+	/* if SQL NULL values should show in table view, make this element visible */
+	display: none;
+	background: #ddd;
+	color: #fff;
+	padding: 0 2px 0 2px;
+}
+
+/* dialog window */
+div#dialog_window {
+}
+
+.ui-dialog-buttonpane {
+	margin-top: 0 !important;
+	clear: both;
+}
+
+/* edit form */
+form {
+	margin-top: 10px;
+	border: none;
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+form label {
+	grid-column: 1 / 2;
+	padding: 0 0 10px 0;
+	color: #10447D;
+}
+form div {
+	grid-column: 2 / 5;
+}
+form input,select {
+	margin: 0 0 10px 0;
+	border: none;
+	background: #fff;
+	padding: 2px 5px;
+}
+form select {
+	box-shadow: none;
+	border-radius: 0px;
+	-webkit-appearance: none;
+	display: inline-block;
+}
+form textarea {
+	height: 90px;
+	width: 90%;
+}
+form pre {
+	white-space: pre-wrap;
+	padding: 0 0 10px 0;
+}
+form input[readonly=readonly] {
+	color: #333;
+	background-color: #ddd;
+}
+form .changed-value {
+	border: 1px solid #92A4C4;
+	color: #10447d;
+	padding: 1px 4px;
+}
+.foreign-table-button {
+	height: 1.5em;
+	width: 1.5em;
+	background-color: transparent ! important;
+	border: none ! important;
+}
+
+div.record_header {
+	/*background-color: #ddd;
+	color: #10447D;*/
+	background-color: #92A4C4;
+	color: #000;
+	margin: 5px 0px 10px 0px;
+	padding: 3px;
+	text-align: center;
+}
+
+div#related_records button {
+	font-size: 90%;
+	background-color: #fff;
+	height: 2em;
+	margin-bottom: 4px;
+	border: none;
+}
+
+div#related_records button.ui-state-hover {
+	background-color: #627DAA;
+}
+
+/* query editor */
+div[aria-describedby="query_window"] {
+	overflow: visible;
+}
+
+form#edit-query {
+	overflow: visible;
+	display: block;
+}
+
+form#edit-query label {
+	width: 125px;
+	clear: left;
+	float: left;
+}
+
+form#edit-query textarea {
+	width: 430px;
+	height: 200px;
+}
+
+form#edit-query ul.ui-menu {
+	width: 200px;
+	float: right;
+}
+
+#query_window #columns-outer label {
+	float: none;
+	margin-bottom: 4px;
+}
+
+form#edit-query ul.ui-menu ul.ui-menu {
+	width: 250px;
+	z-index: 10;
+}
+

@@ -1,0 +1,17 @@
+/* User-defined CSS for UniDB */
+
+/* DIALOG WINDOW:
+ *
+ * <div id="dialog_window" class="ui-dialog-content ui-widget-content">
+ * 	<form id="[TABLE]">   <------   display: grid;
+ *		<label id="[TABLE]-[COLUMN]-label" for="[TABLE]-[COLUMN]">...</label>
+ *		<div id="[TABLE]-[COLUMN]-outer">
+ *			<input/select id="[TABLE]-[COLUMN]" ... />
+ *			[+ buttons for foreign tables if needed]
+ *		</div>
+ *		...
+ *	</form>
+ * </div>
+ */
+
+

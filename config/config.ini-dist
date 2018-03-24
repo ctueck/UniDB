@@ -1,0 +1,52 @@
+; UniDB configuration
+
+[.global]
+db_host="localhost"		; MySQL server
+db_name=""			; MySQL database
+dateformat="%%d/%%m/%%Y"	; format of dates for SELECT
+pageresults="75"		; number of results per page for SELECTs
+maxinputsize="50"		; maximum size of INPUT elements
+logsize="25000"			; size of log to keep (in bytes)
+
+[.ui]
+pagetitle="UniDB *** DEVELOPMENT VERSION ***"	; page title for front-end
+cuttext="50"					; cut text after X characters
+
+; Tables
+;
+;[TABLE]
+;ignore=true/false			; ignored tables are not available at all
+;hidden=true/false			; hidden tables are not shown in menu, but in related records etc.
+;readonly=true/false			; readonly
+;noDelete="1"
+;noEdit=true
+;noGlobalSearch="1"
+;nameColumn=""
+;description="Organisation roles"
+;orderColumn="role.rid"
+;defSelect[]="name"
+;defSelect[]="ehea"
+;orderColumn="country.ehea DESC, country.name"
+;underlyingTable="contact"
+;keyColumn="cid"
+
+;[TABLE.COLUMN]
+;name="ID"
+;type="boolean"
+;placeholder="0031 234 56789 (international) or 02 345 6789 (Belgium)"
+;related_mode=R_NEW | R_EXIST
+;foreign_select_condition="contact.addressExtension = 'RC'"
+
+;[.queries.0]
+;description="List of email addresses"
+;columns[organisation]="name,role,.city,.country"
+;columns[contact]="cid,person,email,.preflang,.brussels"
+;orderBy="organisation.name, contact.person"
+;groupBy="contact.oid"
+;condition="organisation.oid = contact.oid"
+
+;[.queries.2]
+;description="Test SQL"
+;underlyingTable="contact"
+;sql="SELECT contact.cid AS contact_cid, contact.person, organisation.name AS Organisation FROM contact LEFT JOIN organisation USING(oid)"
+
