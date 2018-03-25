@@ -111,40 +111,48 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 		parameters = { };
 	}
 
-	if (! D.sessionId) {
-		// we haven't logged in yet - do this first, loginForm() will run the command afterwards
+	if ( (! D.sessionId) && (path != "/login") && (path != "/login/") ) {
+		// we don't have a session token, and neither is the present call to the login
+		// endpoint -> user has to log in first ; loginForm() will run the command afterwards
 		// (unless we are actually calling a login)
 		D.loginForm(method, path, parameters, callback, failCallback);
 	} else {
 		// we have a sessionID - so let's go
 		return($.ajax({
-			type: method,				// method will be passed through
-			url: D.dbiUrl + path ,			// URL = base URL + path
-			headers: { "X-Session": D.sessionId } ,	// set our session
+			type: method,								// method will be passed through
+			url: D.dbiUrl + path ,							// URL = base URL + path
+			headers: ( D.sessionId ? { "Authorization": "Bearer " + D.sessionId } : { } ),	// pass our session token
 			data: ( method == "GET" ? parameters : JSON.stringify(parameters) ) ,	// we'll send the paramterers as JSON object
 			processData: ( method == "GET" ? true : false ) ,			// thus, no processing ...
 			contentType: ( method == "GET" ? undefined : "application/json" ),	// and content-type set accordingly
 			dataType: "json",			// and we also expect JSON back
 			error: function(jqxhr, errorText, errorObject) {
-				// lower level error (e.g. JSON parse error, timeout, ...) occured
-				D.destroyOverlay();
-				// now we show an error message:
-				var addText = "";
-				if (errorText == "parsererror") {
-					addText = "\n\nData received: " + jqxhr.responseText;
-				} else if (jqxhr.responseJSON.UniDB_fatalError) {
-					addText = "\n\nUniDB error: " + jqxhr.responseJSON.UniDB_fatalError;
+				if ( (jqxhr.status == "401") && jqxhr.responseJSON.UniDB_requestLogin) {
+					// 401 -> login requested?
+					D.loginForm(method, path, parameters, callback, failCallback);
+				} else if ( (jqxhr.status == "401") && jqxhr.responseJSON.UniDB_fatalError) {
+					window.alert("Login failed: " + jqxhr.responseJSON.UniDB_fatalError);
+					D.loginForm(method, path, parameters, callback, failCallback);
+				} else {
+					// other error (e.g. JSON parse error, timeout, ...) occured
+					D.destroyOverlay();
+					// now we show an error message:
+					var addText = "";
+					if (errorText == "parsererror") {
+						addText = "\n\nData received: " + jqxhr.responseText;
+					} else if (jqxhr.responseJSON.UniDB_fatalError) {
+						addText = "\n\nUniDB error: " + jqxhr.responseJSON.UniDB_fatalError;
+					}
+					// now a dialog window will be shown:
+					window.confirm(	"Request failed: " + errorText +
+							"\n\nHTTP Status: " + jqxhr.status + " " + jqxhr.statusText +
+							( errorObject ? "\n\nerrorObject: " + errorObject : "" ) +
+							addText +
+							"\n\nShow log?")
+						&& D.printLog();
+					// call failCallback, if specified
+					if (typeof failCallback == "function") { failCallback(errorText); }
 				}
-				console.log(jqxhr, errorText, errorObject);
-				// now a dialog window will be shown:
-				window.confirm(	"Request failed: " + errorText +
-						"\n\nHTTP Status: " + jqxhr.status + " " + jqxhr.statusText +
-						( errorObject ? "\n\nerrorObject: " + errorObject : "" ) +
-						addText +
-						"\n\nShow log?")
-					&& D.printLog();
-				// call failCallback, if specified
-				if (typeof failCallback == "function") { failCallback(errorText); }
 				return(false);
 			},
 			success: function(data) {
@@ -185,15 +193,7 @@ UniDB.prototype.loginForm = function (method, path, options, callback, failCallb
 		var loginData = {};
 		loginData["username"] = dialog.Fields["username"].value();
 		loginData["password"] = dialog.Fields["password"].value();
-		$.ajax({
-			type: "POST",				// method will be passed through
-			url: D.dbiUrl + "/login" ,		// URL = base URL + path
-			data: JSON.stringify(loginData) ,	// we'll send the paramterers as JSON object
-			processData: false ,			// thus, no processing ...
-			contentType: "application/json",	// and content-type set accordingly
-			dataType: "json",			// and we also expect JSON back
-			error: failCallback ,
-			success: function(data) {
+		D.cmd("POST", "/login", loginData, function(data) {
 				if (data.UniDB_fatalError != undefined || data.UniDB_motd == undefined) {
 					window.alert("Login failed:\n\n"+data.UniDB_fatalError);
 					D.loginForm(method, path, options, callback, failCallback);
@@ -205,8 +205,7 @@ UniDB.prototype.loginForm = function (method, path, options, callback, failCallb
 					// if login successful we call the original command (which triggered the login)
 					D.cmd(method, path, options, callback, failCallback);
 				}
-			}
-		});
+			});
 		dialog_callback();
 	}, function() {
 		if (typeof failCallback == "function") { failCallback(); }

@@ -338,7 +338,7 @@ class UniDB {
 	/* connect to the database */
 		$this->dbh = MDB2::connect($this->dsn);
 		if (PEAR::isError($this->dbh)) {
-			$this->log($this->dbh->getMessage(), true);
+			$this->log($this->dbh->getUserInfo(), "401 Unauthorized");
 		}
 		$this->dbh->setFetchMode(MDB2_FETCHMODE_ASSOC);
 		$this->log("\nUniDB: connected to database");
