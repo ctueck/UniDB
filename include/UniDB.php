@@ -434,7 +434,7 @@ class UniDB {
 			$metanode->removeChild($element);
 		}
 		foreach ($r as $field => $value) {
-			$newnode = $metadata->createElementNS(NS_ODF_META,$metaprefix.':user-defined', $value);
+			$newnode = $metadata->createElementNS(NS_ODF_META,$metaprefix.':user-defined', htmlspecialchars($value));
 			$newnode->setAttributeNS(NS_ODF_META,$metaprefix.':name',$field);
 			$newnode->setAttributeNS(NS_ODF_META,$metaprefix.':value-type','string');
 			$metanode->appendChild($newnode);
