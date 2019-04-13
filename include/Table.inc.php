@@ -47,6 +47,7 @@ class Table {
 		$this->tableName = $name;
 		
 		if ($this->conf('ignore')) {	// ignored or protected table: will never be initialised
+			$this->D->tableUnset($name);
 			$this->D->error("Tried to initialise Table with ignore flag: '".$this->tableName."'\n\nThis was probably caused by another (non-ignored) table having a FOREIGN KEY reference to an ignored table, which is not possible. Either un-ignore this table or remove the reference; you may still hide this table.");
 		}
 
@@ -84,6 +85,7 @@ class Table {
 			ORDER BY	columns.ordinal_position");
 		
 		if ($r->numRows() == 0) {
+			$this->D->tableUnset($name);
 			$this->D->error("Tried to initialise Table object for '".$this->tableName."', but does not exist in database.");
 		}
 
@@ -123,6 +125,7 @@ class Table {
 				$this->underlyingTable = $this->conf('underlyingTable');
 				// NB: PRIMARY KEY of the underlying table must be part of the VIEW - otherwise we throw fatal error:
 				if (! $this->C($this->D->T($this->underlyingTable)->priKey)) {
+					$this->D->tableUnset($name);
 					$this->D->error("configuration specifies ".$this->underlyingTable." as underlying table for view ".$this->tableName.", but PRIMARY KEY column is not contained in the view.");
 				}
 				// "PRIMARY KEY" of the VIEW is same as underlying TABLE's
