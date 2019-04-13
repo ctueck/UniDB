@@ -101,6 +101,9 @@ Dialog.prototype.show = function () {
 	this.jqDialog.dialog("option", "title", this.title);
 
 	// start with the main Record
+	$("<div/>", {	"class": "record_header",
+			html: this.mainRecord.T.description } )
+		.appendTo(this.jqDialog);
 	this.mainRecord.showForm(this.jqDialog, true);
 	// show forms for all related records
 	for (var i in this.relatedRecords) {
@@ -164,6 +167,9 @@ Dialog.prototype.show = function () {
 					}
 			} ] );
 	}
+
+	// remove any possible close function left over
+	this.jqDialog.off("dialogclose");
 
 	// finall, open the dialog window
 	this.jqDialog.dialog("open");

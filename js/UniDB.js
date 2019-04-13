@@ -25,6 +25,15 @@ const B_CANCEL =	4;	// closeFunction only
 const B_ALL =		7;	// OK, Apply, Cancel
 const B_CLOSE =		8;	// same as Cancel, but labelled Close
 
+// XML namespaces for Open Document Format files
+const NS_ODF_OFFICE =	"urn:oasis:names:tc:opendocument:xmlns:office:1.0";
+const NS_ODF_META =	"urn:oasis:names:tc:opendocument:xmlns:meta:1.0";
+
+// MIME types
+const MIME_JSON =	"application/json";
+const MIME_ODF =	"application/vnd.oasis.opendocument.text";
+const MIME_CSV =	"text/csv";
+
 // autocomplete widget with different categories:
 $.widget( "custom.catcomplete", $.ui.autocomplete, {
 	_renderMenu: function( ul, items ) {
@@ -53,6 +62,10 @@ function UniDB(dbiUrl) {
 
 	// argument: URL of the dbi.php file
 	D.dbiUrl = dbiUrl;
+
+	// this will be the ID of our session on the server - it will be set on successful login
+	D.sessionId = D.cookies.hasItem("UniDB-session") ? D.cookies.getItem("UniDB-session") : null;
+
 	// prepare the general dialog window
 	D.dialogWindow = $("#dialog_window").dialog({
 		autoOpen: false,
@@ -77,7 +90,7 @@ function UniDB(dbiUrl) {
 
 	// fetch the list of tables (this will also trigger a login, load configuration, etc.)
 	D.Tables = {};
-	D.cmd('getTables', undefined, undefined, function (data) {
+	D.cmd('GET', "/system/tables", undefined, function (data) {
 		D.Config = data.uiconfig;	// configuration passed from PHP
 		// data.tables is an Object, with the SQL name as key and the description as value
 		for (var tableName in data.tables) {
@@ -97,68 +110,99 @@ function UniDB(dbiUrl) {
  *****/
 
 /* the main helper: run UniDB command on the server */
-UniDB.prototype.cmd = function (command, table, parameters, callback, failCallback) {
+UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback, returnType) {
 	var D = this;	// safe in separate variable, since "this" points to sth else in callbacks
-	
+
 	this.createOverlay();	// activate overlay to grey out screen
 
+	// return type is JSON unless otherwise specified
+	if (typeof returnType == "undefined") {
+		returnType = "application/json";
+	}
 	// process parameters
 	if (typeof parameters == "undefined") {			// make empty Object if not given
 		parameters = { };
 	}
-	parameters["__UniDB"] = command;
-	if (typeof table !== "undefined") {			// table is optional, otherwise command is "global"
-		parameters["__table"] = table;
-	}
 
-	// HERE THE REAL WORK COMES:
-	return($.ajax({
-		type: "POST",
-		url: D.dbiUrl,
-		data: parameters,
-		dataType: "json",
-		error: function(jqxhr, errorText, errorObject) {
-			// lower level error (e.g. JSON parse error, timeout, ...) occured
-			D.destroyOverlay();
-			// now we show an error message:
-			var addText = "";
-			if (errorText == "parsererror") {
-				addText = "\n\nData received:\n" + jqxhr.responseText;
-			}
-			// now a dialog window will be shown:
-			window.confirm("Request to UniDB handler failed:\n\n" + errorText + ": " + errorObject + addText + "\n\nShow log?")
-				&& D.printLog();
-			// call failCallback, if specified
-			if (typeof failCallback == "function") { failCallback(errorText); }
-			return(false);
-		},
-		success: function(data) {
-			if (data.UniDB_fatalError != undefined) {
-				// error occured as a result of the command
-				D.destroyOverlay();
-				// now a dialog window will be shown:
-				window.confirm("UniDB command failed with fatal error:\n\n"+data.UniDB_fatalError+"\n\nShow log?")
-					&& D.printLog();
-				// call failCallback, if specified
-				if (typeof failCallback == "function") { failCallback(data.UniDB_fatalError); }
-				return(false);
-			}
-			if (data.UniDB_requestLogin != undefined) {
-				// we need to (re-)login: show a login form, and this will - if successful - call the original command (again)
-				D.loginForm(command, table, parameters, callback, failCallback);
-				return(false);
-			}
-			// function to deal with the data
-			callback(data);
-			// last step: re-enable form / remove overlay div
-			D.destroyOverlay();
-			return(true);
+	if ( (! D.sessionId) && (path != "/login") && (path != "/login/") ) {
+		// we don't have a session token, and neither is the present call to the login
+		// endpoint -> user has to log in first ; loginForm() will run the command afterwards
+		// (unless we are actually calling a login)
+		D.loginForm(method, path, parameters, callback, failCallback);
+	} else {
+		// we have a sessionID, or we're logging in - let's go
+		var requestHeaders = { "Accept": returnType };
+		if (D.sessionId) {
+			// pass our session token in Auth header
+			requestHeaders["Authorization"] = "Bearer " + D.sessionId;
 		}
-	}));
+
+		return($.ajax({
+			type: method,								// method will be passed through
+			url: D.dbiUrl + path ,							// URL = base URL + path
+			headers: requestHeaders ,
+			data: ( method == "GET" ? parameters : JSON.stringify(parameters) ) ,	// we'll send the paramterers as JSON object
+			processData: ( method == "GET" ? true : false ) ,			// thus, no processing ...
+			contentType: ( method == "GET" ? undefined : "application/json" ),	// and content-type set accordingly
+			dataType: ( returnType == "application/json" ? "json" : "text" ),	// if we expect JSON back, treat as such
+			error: function(jqxhr, errorText, errorObject) {
+				if ( (jqxhr.status == "401") && jqxhr.responseJSON.UniDB_requestLogin) {
+					// 401 -> login requested?
+					D.loginForm(method, path, parameters, callback, failCallback);
+				} else if ( (jqxhr.status == "401") && jqxhr.responseJSON.UniDB_fatalError) {
+					window.alert("Login failed: " + jqxhr.responseJSON.UniDB_fatalError);
+					D.loginForm(method, path, parameters, callback, failCallback);
+				} else {
+					// other error (e.g. JSON parse error, timeout, ...) occured
+					D.destroyOverlay();
+					// now we show an error message:
+					var addText = "";
+					if (errorText == "parsererror") {
+						addText = "\n\nData received: " + jqxhr.responseText;
+					} else if (jqxhr.responseJSON && jqxhr.responseJSON.UniDB_fatalError) {
+						addText = "\n\nUniDB error: " + jqxhr.responseJSON.UniDB_fatalError;
+					}
+					// now a dialog window will be shown:
+					window.confirm(	"Request failed: " + errorText +
+							"\n\nRequest: " + method + " " + D.dbiUrl + path +
+							"\n\nHTTP Status: " + jqxhr.status + " " + jqxhr.statusText +
+							( errorObject ? "\n\nerrorObject: " + errorObject : "" ) +
+							addText +
+							"\n\nShow log?")
+						&& D.printLog();
+					// call failCallback, if specified
+					if (typeof failCallback == "function") { failCallback(errorText); }
+				}
+				return(false);
+			},
+			success: function(data) {
+				if (data && data.UniDB_fatalError != undefined) {
+					// error occured as a result of the command
+					D.destroyOverlay();
+					// now a dialog window will be shown:
+					window.confirm("UniDB command failed with fatal error:\n\n"+data.UniDB_fatalError+"\n\nShow log?")
+						&& D.printLog();
+					// call failCallback, if specified
+					if (typeof failCallback == "function") { failCallback(data.UniDB_fatalError); }
+					return(false);
+				}
+				if (data && data.UniDB_requestLogin != undefined) {
+					// we need to (re-)login: show a login form, and this will - if successful - call the original command (again)
+					D.loginForm(method, path, parameters, callback, failCallback);
+					return(false);
+				}
+				// function to deal with the data
+				if (typeof callback == "function") { callback(data); }
+				// last step: re-enable form / remove overlay div
+				D.destroyOverlay();
+				return(true);
+			}
+		}));
+	}
 }
 
 /* loginForm(): show login window, called by cmd() if login is needed */
-UniDB.prototype.loginForm = function (command, table, options, callback, failCallback) {
+UniDB.prototype.loginForm = function (method, path, options, callback, failCallback) {
 	var D = this;	// safe in separate variable, since "this" points to sth else in callbacks
 
 	var loginForm = {	username: { label: "Username",	type: "char",		size: 20 },
@@ -167,20 +211,21 @@ UniDB.prototype.loginForm = function (command, table, options, callback, failCal
 	// submit function
 	new SimpleDialog(D, "login-form", "Please log in", loginForm, function(dialog, dialog_callback) {
 		var loginData = {};
-		loginData["login"] = "1";
 		loginData["username"] = dialog.Fields["username"].value();
 		loginData["password"] = dialog.Fields["password"].value();
-		$.post(D.dbiUrl, loginData, function(data) {
-			if (data.UniDB_fatalError != undefined || data.UniDB_motd == undefined) {
-				window.alert("Login failed:\n\n"+data.UniDB_fatalError);
-				D.loginForm(command, table, options, callback, failCallback);
-			} else {
-				D.motd = data.UniDB_motd;	// motd (usually connect info)
-				$("#motd").text(D.motd);
-				// if login successful we call the original command (which triggered the login)
-				D.cmd(command, table, options, callback, failCallback);
-			}
-		}, "json");
+		D.cmd("POST", "/login", loginData, function(data) {
+				if (data.UniDB_fatalError != undefined || data.UniDB_motd == undefined) {
+					window.alert("Login failed:\n\n"+data.UniDB_fatalError);
+					D.loginForm(method, path, options, callback, failCallback);
+				} else {
+					D.sessionId = data.session;	// this session ID will be our token
+					D.cookies.setItem("UniDB-session", D.sessionId);
+					D.motd = data.UniDB_motd;	// motd (usually connect info)
+					$("#motd").text(D.motd);
+					// if login successful we call the original command (which triggered the login)
+					D.cmd(method, path, options, callback, failCallback);
+				}
+			});
 		dialog_callback();
 	}, function() {
 		if (typeof failCallback == "function") { failCallback(); }
@@ -189,8 +234,16 @@ UniDB.prototype.loginForm = function (command, table, options, callback, failCal
 
 /* logout(): obvious purpose */
 UniDB.prototype.logout = function () {
-	$("#motd").text("[logged out]");
-	$.ajax(this.dbiUrl + "?logout=1");
+	var D = this;
+	if (this.sessionId) {
+		this.cmd('GET', '/logout', { }, function(data) {
+			D.cookies.removeItem("UniDB-session");
+			D.sessionId = null;
+			$("#motd").text(data.UniDB_goodbye);
+		});
+	} else {
+		window.alert("you're already logged out...");
+	}
 }
 
 /*****
@@ -287,7 +340,7 @@ UniDB.prototype.menu = function () {
 		.button({ icons: { primary: "ui-icon-search" }})
 		.on("click",function(evnt) {
 			// update queries from server
-			D.cmd('getQueries', undefined, { mtime: D.mtime } , function (data) {
+			D.cmd('GET', '/system/queries', { mtime: D.mtime } , function (data) {
 				D.mtime = data.mtime;
 				if (data.queries) {
 					D.initQueries(data.queries);
@@ -304,7 +357,7 @@ UniDB.prototype.menu = function () {
 						category = description.substr(0, description.indexOf(":")).trimRight();
 						description = description.substr(description.indexOf(":")+1).trimLeft();
 					}
-					$( "<a/>", { html: D.stripText(description, true) })
+					$( "<a/>", { html: D.stripText(description), title: description })
 						.appendTo(entry)
 						.on("click",function() {
 							tableObject.reset();
@@ -421,7 +474,7 @@ UniDB.prototype.showHome = function () {
 			delay: 500,
 			minLength: 3,
 			source: function(request, response) {
-				D.cmd('search', undefined, { search: request.term }, response);
+				D.cmd('GET', '/system/search', { search: request.term }, response);
 			},
 			select: function(evnt, selection) {
 				var T = ( D.T(selection.item.table).underlyingTable ?
@@ -440,7 +493,7 @@ UniDB.prototype.showHome = function () {
 		.appendTo("#content")
 		.keypress(function(evnt) {
 			if (evnt.which == 13) {
-				D.cmd('newSimpleQuery', undefined, { userQuery: true, sql: evnt.target.value }, function(response) {
+				D.cmd('POST', '/query', undefined, { userQuery: true, sql: evnt.target.value }, function(response) {
 					var newQuery = new Table(D, response.name, response.info);
 					D.Queries.push(newQuery);
 					newQuery.show();
@@ -455,7 +508,7 @@ UniDB.prototype.showHome = function () {
 UniDB.prototype.printLog = function () {
 	var D = this;	// safe in separate variable, since "this" points to sth else in callbacks
 
-	D.cmd("printLog", undefined, undefined, function(data) {
+	D.cmd('GET', '/system/log', undefined, function(data) {
 		new SimpleDialog(	D,
 					"form-debug",
 					"UniDB log",
@@ -467,4 +520,80 @@ UniDB.prototype.printLog = function () {
 					B_CLOSE );
 	});
 }
+
+
+/*\
+|*|
+|*|	:: cookies.js ::
+|*|
+|*|	A complete cookies reader/writer framework with full unicode support.
+|*|
+|*|	Revision #3 - July 13th, 2017
+|*|
+|*|	https://developer.mozilla.org/en-US/docs/Web/API/document.cookie
+|*|	https://developer.mozilla.org/User:fusionchess
+|*|	https://github.com/madmurphy/cookies.js
+|*|
+|*|	This framework is released under the GNU Public License, version 3 or later.
+|*|	http://www.gnu.org/licenses/gpl-3.0-standalone.html
+|*|
+|*|	Syntaxes:
+|*|
+|*|	* docCookies.setItem(name, value[, end[, path[, domain[, secure]]]])
+|*|	* docCookies.getItem(name)
+|*|	* docCookies.removeItem(name[, path[, domain]])
+|*|	* docCookies.hasItem(name)
+|*|	* docCookies.keys()
+|*|
+\*/
+
+UniDB.prototype.cookies = {
+
+	getItem: function (sKey) {
+		if (!sKey) { return null; }
+		return decodeURIComponent(document.cookie.replace(new RegExp("(?:(?:^|.*;)\\s*" + encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&") + "\\s*\\=\\s*([^;]*).*$)|^.*$"), "$1")) || null;
+	},
+	setItem: function (sKey, sValue, vEnd, sPath, sDomain, bSecure) {
+		if (!sKey || /^(?:expires|max\-age|path|domain|secure)$/i.test(sKey)) { return false; }
+		var sExpires = "";
+		if (vEnd) {
+			switch (vEnd.constructor) {
+				case Number:
+					sExpires = vEnd === Infinity ? "; expires=Fri, 31 Dec 9999 23:59:59 GMT" : "; max-age=" + vEnd;
+					/*
+					Note: Despite officially defined in RFC 6265, the use of `max-age` is not compatible with any
+					version of Internet Explorer, Edge and some mobile browsers. Therefore passing a number to
+					the end parameter might not work as expected. A possible solution might be to convert the the
+					relative time to an absolute time. For instance, replacing the previous line with:
+					*/
+					/*
+					sExpires = vEnd === Infinity ? "; expires=Fri, 31 Dec 9999 23:59:59 GMT" : "; expires=" + (new Date(vEnd * 1e3 + Date.now())).toUTCString();
+					*/
+					break;
+				case String:
+					sExpires = "; expires=" + vEnd;
+					break;
+				case Date:
+					sExpires = "; expires=" + vEnd.toUTCString();
+					break;
+			}
+		}
+		document.cookie = encodeURIComponent(sKey) + "=" + encodeURIComponent(sValue) + sExpires + (sDomain ? "; domain=" + sDomain : "") + (sPath ? "; path=" + sPath : "") + (bSecure ? "; secure" : "");
+		return true;
+	},
+	removeItem: function (sKey, sPath, sDomain) {
+		if (!this.hasItem(sKey)) { return false; }
+		document.cookie = encodeURIComponent(sKey) + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT" + (sDomain ? "; domain=" + sDomain : "") + (sPath ? "; path=" + sPath : "");
+		return true;
+	},
+	hasItem: function (sKey) {
+		if (!sKey || /^(?:expires|max\-age|path|domain|secure)$/i.test(sKey)) { return false; }
+		return (new RegExp("(?:^|;\\s*)" + encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&") + "\\s*\\=")).test(document.cookie);
+	},
+	keys: function () {
+		var aKeys = document.cookie.replace(/((?:^|\s*;)[^\=]+)(?=;|$)|^\s*|\s*(?:\=[^;]*)?(?:\1|$)/g, "").split(/\s*(?:\=[^;]*)?;\s*/);
+		for (var nLen = aKeys.length, nIdx = 0; nIdx < nLen; nIdx++) { aKeys[nIdx] = decodeURIComponent(aKeys[nIdx]); }
+		return aKeys;
+	}
+};
 

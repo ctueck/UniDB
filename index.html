@@ -12,6 +12,7 @@
         <link rel="stylesheet" href="css/user.css" >	<!-- styles for specific tables/columns -->
         <script src="js/jquery-1.10.2.js"></script>
         <script src="js/jquery-ui-1.10.4.custom.js"></script>
+        <script src="js/jszip.min.js"></script>
         <script src="js/UniDB.js"></script>
 	<script src="js/UniDB-SimpleDialog.js"></script>
 	<script src="js/UniDB-Dialog.js"></script>
@@ -20,7 +21,7 @@
 	<script src="js/UniDB-Table.js"></script>
         <script>
 		$(document).ready( function() {
-			UniDB_instance = new UniDB("dbi.php");
+			UniDB_instance = new UniDB("api/v2");
 		} );
 	</script>
 </head>

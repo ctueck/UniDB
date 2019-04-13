@@ -26,6 +26,15 @@ class SimpleQuery {
 
 	public $Templates = array();	// Templates used for this query
 
+	/* routing table for REST API - NB: static! */
+	public static $routingTable = array(
+		"NULL" =>	array(	"GET" =>	"getTable",
+					"PUT" =>	"modify"		),
+		"lock" =>	array(	"POST" =>	"lock",
+					"DELETE" =>	"unlock"		),
+		"*" =>		array(	"GET" =>	"getRecord"		)
+	);
+
 	public function __construct (&$D, $queryConf) {
 		// &$D        : parent UniDB object
 		// $queryConf : properties are description, columns, condition, orderBy
@@ -106,7 +115,7 @@ class SimpleQuery {
 			$this->searchable = preg_match("/\/\*.*\*\//", $query);
 			$this->sqlQuery = $query;
 		} else {
-			$this->D->log("Forbidden query: '".$query."' does not start with SELECT.", true);
+			$this->D->error("Forbidden query: '".$query."' does not start with SELECT.", 403);
 		}
 	}
 
@@ -162,7 +171,7 @@ class SimpleQuery {
 			} else {			// ... otherwise we need to run the whole query, without LIMIT
 				$r = $this->D->dbh->query($query);
 				if (PEAR::isError($r)) {
-					$this->D->log($r->getMessage()."\n\n".$r->getUserinfo(),true);
+					$this->D->error($r);
 				} else {
 					$totalRows = $r->numRows();
 				}
@@ -175,7 +184,7 @@ class SimpleQuery {
 		$r = $this->D->dbh->query($query);
 		
 		if (PEAR::isError($r)) {
-			$this->D->log($r->getMessage()."\n\n".$r->getUserinfo(),true);
+			$this->D->error($r);
 		}
 
 		$this->D->log("\n".$this->D->dbh->last_query." // returned ".$r->numRows()." rows");
@@ -271,6 +280,7 @@ class SimpleQuery {
 		/* return information needed by the UI to setup corresponding JavaScript class */
 		return( array(	"name" =>		$this->name,
 				"description" =>	$this->description,
+				"section" =>		"query",
 				"userQuery" =>		$this->isUserQuery,
 				"saveQuery" =>		$this->saveQuery,
 				"isPublic" =>		$this->isPublic,
@@ -288,7 +298,7 @@ class SimpleQuery {
 	public function lock () {
 		$readLock = $this->readLock();
 		if ($readLock && (time() < ($readLock['since']+$this->D->conf('locktime'))) ) {
-			$this->D->log("Cannot lock query, already locked by ".$readLock['by']." until ".$readLock['until'], true);
+			$this->D->error("Cannot lock query, already locked by ".$readLock['by']." until ".$readLock['until'], 403);
 		} else {
 			$this->writeLock(array(	'since' =>	time(),
 						'hash' =>	md5(microtime().$this->D->loggedUser()),
@@ -299,27 +309,27 @@ class SimpleQuery {
 		}
 	}
 
-	public function unlock ($options) {
+	public function unlock ($Id, $options) {
 		$readLock = $this->readLock();
 		if ( $readLock == false) {
 			$this->D->log("Query was not locked.");
-			return(true);
+			return;
 		} elseif ($readLock && isset($options['hash']) && ( $readLock['hash'] == $options['hash'] ) ) {
 			$this->D->log("Removed lock ".$readLock['hash'].", was valid until ".$readLock['until']);
 			$this->writeLock();
-			return(true);
+			return;
 		} else {
-			$this->D->log("Cannot unlock query, incorrect hash. Locked by ".$readLock['by']." until ".$readLock['until'], true);
+			$this->D->error("Cannot unlock query, incorrect hash. Locked by ".$readLock['by']." until ".$readLock['until'], 403);
 		}
 	}
 
-	public function modify ($queryConf) {
+	public function modify ($Id, $queryConf) {
 		$readLock = $this->readLock();
 		if ($readLock == false) {
-			$this->D->log("Cannot save query, since it has not been locked.", true);
+			$this->D->error("Cannot save query, since it has not been locked.", 403);
 		}
 		if ($queryConf['hash'] != $readLock['hash']) {
-			$this->D->log("Cannot save query, locked by ".$readLock['by']." until ".$readLock['until'].". Maybe your lock expired and another user locked it in between.", true);
+			$this->D->error("Cannot save query, locked by ".$readLock['by']." until ".$readLock['until'].". Maybe your lock expired and another user locked it in between.", 403);
 		}
 		// to modify, we re-run the constructor
 		$this->__construct($this->D, $queryConf);
@@ -349,6 +359,15 @@ class SimpleQuery {
 		$this->lockFile();	// this will fix the lockfile, i.e. move it to right directory if needed
 	}
 
+	public function getTable ($Id, $options) {
+	// route GET to download or show function
+		if (isset($options["download"]) && $options["download"]) {
+			return($this->download($options));
+		} else {
+			return($this->show($options));
+		}
+	}
+
 	public function show ($options) {
 	// show the records as a plain table - $options is the query string parameters
 
@@ -365,42 +384,45 @@ class SimpleQuery {
 
 	public function download ($options) {
 	// download data as CSV
-		header("Content-type: text/csv");
-		header("Content-disposition: attachment; filename=".$this->description.".csv");
 
 		// first, we fetch the data/result
 		$result = $this->run($this->prepareQuery($options, true));
 
-		$out = fopen('php://output', 'w');	// we need stdout as a filehandle...
+		// prepend column names in front of data array
 		$columnNames = array();
 		foreach ($result["columns"] as $c) {
 			$columnNames[] = $c["description"];
 		}
-		fputcsv($out, $columnNames);
-		foreach ($result["data"] as $d) {
-			fputcsv($out, $d);
-		}
-		fclose($out);
+		array_unshift($result["data"], $columnNames);
 
-		return(null);
+		// return only data
+		return($result['data']);
+	}
+
+	public function getRecord ($Id, $options) {
+	// route GET to download or edit function
+		if (isset($options["download"]) && $options["download"]) {
+			return($this->downloadOne($Id, $options));
+		} else {
+			return($this->editRecord($Id, $options));
+		}
 	}
 
 	/* downloadOne = insert data of one record into OpenDocument Format file */
-	public function downloadOne ($options) {
+	public function downloadOne ($Id, $options) {
 
-		//header("Content-disposition: attachment; filename=".$this->description.".csv");
+		if (!isset($Id)) {
+			$this->D->error("cannot download single result: key not specified", 400);
+		}
 
-		if (isset($options[$this->priKey])) {
-			if ($this->priKey == '_count') {
-				$skipRows = $options[$this->priKey];
-			} else {
-				$skipRows = 0;
-				$options['filterTable'] = $this->underlyingTable;
-				$options['filterColumn'] = $this->priKey;
-				$options['filterValue'] = $options[$this->priKey];
-			}
+		if (isset($options['key']) && $options['key'] != "_count") {
+			$skipRows = 0;
+			$options['filterTable'] = $this->underlyingTable;
+			$options['filterColumn'] = $this->priKey;
+			$options['filterValue'] = $options[$this->priKey];
 		} else {
-			$this->D->log("cannot download single result: key not specified",true);
+			$options['key'] = "_count";
+			$skipRows = $Id;
 		}
 
 		$realQuery = $this->prepareQuery($options, true);
@@ -409,41 +431,39 @@ class SimpleQuery {
 		$r = $this->D->dbh->queryRow($realQuery['query']);
 
 		if (PEAR::isError($r)) {
-			$this->D->log($r->getMessage()."\n\n".$r->getUserinfo(),true);
+			$this->D->error($r);
 		}
 		if (!isset($r)) {		// record not found
-			$this->D->log("record not found",true);
+			$this->D->error("record not found",404);
 		}
 
-		$r = array_merge(array($this->priKey => $options[$this->priKey]),$r);	// add "PRIMARY KEY" to results
-
-		$this->D->resultToOdt($options, $r);
+		return(array_merge(array($options['key'] => $Id),$r));	// add "PRIMARY KEY" to results
 	}
 
 	/* "edit" record function, actually used to view details of one result line */
-	public function editRecord ($options) {
+	public function editRecord ($Id, $options) {
 
-		if (isset($options[$this->priKey])) {
-			$skipRows = $options[$this->priKey];
-		} else {
-			$this->D->log("cannot view single result: number not specified",true);
+		if (!isset($Id)) {
+			$this->D->error("cannot view single result: number not specified", 400);
 		}
 
 		$realQuery = $this->prepareQuery($options, true);
 
-		$this->D->dbh->setLimit(1, $skipRows);	// we want one result and skip all preceding ones
+		$this->D->dbh->setLimit(1, $Id);	// we want one result and skip all preceding ones
 		$r = $this->D->dbh->queryRow($realQuery['query']);
 
 		if (PEAR::isError($r)) {
-			$this->D->log($r->getMessage()."\n\n".$r->getUserinfo(),true);
+			$this->D->error($r);
 		}
 		if (!isset($r)) {		// record not found
-			$this->D->log("record not found",true);
+			$this->D->error("record not found", 404);
 		}
+
+		$this->D->log("\n".$this->D->dbh->last_query." // returned 1 row");
 
 		/* now we build a fieldset as required by the UI */
 
-		$r = array_merge(array($this->priKey => $options[$this->priKey]),$r);	// add "PRIMARY KEY" to results
+		$r = array_merge(array($this->priKey => $Id),$r);	// add "PRIMARY KEY" to results
 
 		$fieldset = array();	// this will hold the form info, to be JSON-encoded
 		
@@ -505,9 +525,18 @@ class Query extends SimpleQuery {
 					$columns = explode(",",$columns_str);
 				}
 				$columns = array_unique($columns);	// remove duplicates
+				// check if all columns exist, ignore non-existent ones
+				$columns_checked = array();
+				foreach($columns as $column) {
+					if ($this->D->T($table)->C(preg_replace("/^\./", "", $column)) != null) {
+						$columns_checked[] = $column;
+					} else {
+						$this->D->log("column [$column] does not exist in table [$table]", true);
+					}
+				}
 				// columns starting with dot are excluded from display
-				$displayColumns = preg_grep("/^[^\.]/", $columns);
-				$downloadColumns = preg_replace("/^\./", "", $columns);
+				$displayColumns = preg_grep("/^[^\.]/", $columns_checked);
+				$downloadColumns = preg_replace("/^\./", "", $columns_checked);
 			}
 			// if we have a PRIMARY KEY set, we use the table as underlyingTable, unless overridden
 			if (!isset($this->underlyingTable) && in_array($this->D->T($table)->priKey, $displayColumns)) {

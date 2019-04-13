@@ -22,32 +22,33 @@ function Record (tableObject, key, keyColumn, callback) {
 Record.prototype.initialise = function (callback) {
 	var R = this;		// for use in enclosures
 	var cmd;
-	var options = {};
+	var options = this.T.options;		// important for queries: order, search, etc. influence record count/ID
 
 	if (this.key != undefined) {		// we have a Record object for an existing record
-		options[this.keyColumn] = this.key; // primary key column name = primary key column value
-		cmd = "editRecord";
-	} else {
-		cmd = "newRecord";
+		options["key"] = this.keyColumn; // pass name of key column (usually PRIMARY KEY)
 	}
 
 	// now we load the record / a blank form from the server:
-	this.T.D.cmd(cmd, this.T.tableName, options, function (data) {
-		R.priKeyValue = data.fieldset[R.T.priKey].value;
-		R.related = data.related;
-		// now we iterate over the columns, and initialise Field objects
-		for (var col in data.fieldset) {
-			// we don't display the keyColumn if it is different from the PRIMARY KEY
-			if ( ! ( (R.keyColumn != R.T.priKey) && (col == R.keyColumn) ) ) {
-				if (R.Fields[col]) {		// if the field already exists, we only have to update the value
-					R.Fields[col].set(data.fieldset[col].value);
-				} else {
-					R.Fields[col] = new Field(R, col, data.fieldset[col]);
-				} 
-			} 
-		}
-		callback(R);	// call the callback with the new Record object as parameter
-	}, undefined);
+	this.T.D.cmd(	"GET",
+			"/" + this.T.section + "/" + this.T.tableName + "/" + (this.key != undefined ? this.key : ".template" ) ,
+			options,
+			function (data) {
+				R.priKeyValue = data.fieldset[R.T.priKey].value;
+				R.related = data.related;
+				// now we iterate over the columns, and initialise Field objects
+				for (var col in data.fieldset) {
+					// we don't display the keyColumn if it is different from the PRIMARY KEY
+					if ( ! ( (R.keyColumn != R.T.priKey) && (col == R.keyColumn) ) ) {
+						if (R.Fields[col]) {		// if the field already exists, we only have to update the value
+							R.Fields[col].set(data.fieldset[col].value);
+						} else {
+							R.Fields[col] = new Field(R, col, data.fieldset[col]);
+						}
+					}
+				}
+				callback(R);	// call the callback with the new Record object as parameter
+			},
+			undefined);
 }
 
 // showForm() : display an edit form
@@ -90,9 +91,16 @@ Record.prototype.save = function (callback, failCallback) {
 		}
 	}
 	// set PRIMARY KEY (for a new record it will be undefined)
-	postData[this.T.priKey] = (this.priKeyValue ? this.priKeyValue : undefined);
+	if (this.priKeyValue) {
+		var method = "PUT";
+		var url = "/" + this.T.section + "/" + this.T.tableName + "/" + this.priKeyValue;
+		postData[this.T.priKey] = this.priKeyValue; //? this.priKeyValue : undefined);
+	} else {
+		var method = "POST";
+		var url = "/" + this.T.section + "/" + this.T.tableName + "/";
+	}
 
-	this.T.D.cmd("saveRecord", this.T.tableName, postData, function(data) {
+	this.T.D.cmd(method, url, postData, function(data) {
 		if (R.priKeyValue == undefined) {	// this was a new record
 			R.keyColumn = R.T.priKey;
 			R.key = data[R.T.priKey];
