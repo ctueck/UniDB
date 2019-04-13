@@ -132,7 +132,8 @@ Field.prototype.showField = function(target) {
 			for (var i = 0; i < this.options.length; i++) {
 				var option = $("<option/>", {
 					value:	( this.options[i][0] ? this.options[i][0] : "NULL" ),
-					text:	this.D.stripText(this.options[i][1], true)
+					text:	this.D.stripText(this.options[i][1], false),
+					title:	this.options[i][1]
 				});
 				if (this.oldValue == this.options[i][0]) {
 					option.prop("selected","selected");
@@ -177,6 +178,13 @@ Field.prototype.showField = function(target) {
 
 	this.input.appendTo(outerDiv);
 	
+	// create a download button if this is the PRIMARY KEY
+	if (this.R && this.name == this.R.T.priKey) {
+		$("<a/>", { href: "#", text: "Fill template", "class": "foreign-table-button" })
+			.button({ text: false, icons: { primary: "ui-icon-copy" }})
+			.click(	{ T: this.R.T, value: this.oldValue }, this.R.T.downloadOneFunction )
+			.appendTo(outerDiv);
+	}
 	// make a related records and an edit button, if this is a FOREIGN KEY
 	if (this.foreign_table != undefined) {
 		$("<a/>", { href: "#", text: "Related records", "class": "foreign-table-button" } )

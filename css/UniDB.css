@@ -265,6 +265,7 @@ form textarea {
 form pre {
 	white-space: pre-wrap;
 	padding: 0 0 10px 0;
+	margin: 0;
 }
 form input[readonly=readonly] {
 	color: #333;

@@ -25,6 +25,15 @@ const B_CANCEL =	4;	// closeFunction only
 const B_ALL =		7;	// OK, Apply, Cancel
 const B_CLOSE =		8;	// same as Cancel, but labelled Close
 
+// XML namespaces for Open Document Format files
+const NS_ODF_OFFICE =	"urn:oasis:names:tc:opendocument:xmlns:office:1.0";
+const NS_ODF_META =	"urn:oasis:names:tc:opendocument:xmlns:meta:1.0";
+
+// MIME types
+const MIME_JSON =	"application/json";
+const MIME_ODF =	"application/vnd.oasis.opendocument.text";
+const MIME_CSV =	"text/csv";
+
 // autocomplete widget with different categories:
 $.widget( "custom.catcomplete", $.ui.autocomplete, {
 	_renderMenu: function( ul, items ) {
@@ -101,11 +110,15 @@ function UniDB(dbiUrl) {
  *****/
 
 /* the main helper: run UniDB command on the server */
-UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback) {
+UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback, returnType) {
 	var D = this;	// safe in separate variable, since "this" points to sth else in callbacks
-	
+
 	this.createOverlay();	// activate overlay to grey out screen
 
+	// return type is JSON unless otherwise specified
+	if (typeof returnType == "undefined") {
+		returnType = "application/json";
+	}
 	// process parameters
 	if (typeof parameters == "undefined") {			// make empty Object if not given
 		parameters = { };
@@ -117,15 +130,21 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 		// (unless we are actually calling a login)
 		D.loginForm(method, path, parameters, callback, failCallback);
 	} else {
-		// we have a sessionID - so let's go
+		// we have a sessionID, or we're logging in - let's go
+		var requestHeaders = { "Accept": returnType };
+		if (D.sessionId) {
+			// pass our session token in Auth header
+			requestHeaders["Authorization"] = "Bearer " + D.sessionId;
+		}
+
 		return($.ajax({
 			type: method,								// method will be passed through
 			url: D.dbiUrl + path ,							// URL = base URL + path
-			headers: ( D.sessionId ? { "Authorization": "Bearer " + D.sessionId } : { } ),	// pass our session token
+			headers: requestHeaders ,
 			data: ( method == "GET" ? parameters : JSON.stringify(parameters) ) ,	// we'll send the paramterers as JSON object
 			processData: ( method == "GET" ? true : false ) ,			// thus, no processing ...
 			contentType: ( method == "GET" ? undefined : "application/json" ),	// and content-type set accordingly
-			dataType: "json",			// and we also expect JSON back
+			dataType: ( returnType == "application/json" ? "json" : "text" ),	// if we expect JSON back, treat as such
 			error: function(jqxhr, errorText, errorObject) {
 				if ( (jqxhr.status == "401") && jqxhr.responseJSON.UniDB_requestLogin) {
 					// 401 -> login requested?
@@ -140,11 +159,12 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 					var addText = "";
 					if (errorText == "parsererror") {
 						addText = "\n\nData received: " + jqxhr.responseText;
-					} else if (jqxhr.responseJSON.UniDB_fatalError) {
+					} else if (jqxhr.responseJSON && jqxhr.responseJSON.UniDB_fatalError) {
 						addText = "\n\nUniDB error: " + jqxhr.responseJSON.UniDB_fatalError;
 					}
 					// now a dialog window will be shown:
 					window.confirm(	"Request failed: " + errorText +
+							"\n\nRequest: " + method + " " + D.dbiUrl + path +
 							"\n\nHTTP Status: " + jqxhr.status + " " + jqxhr.statusText +
 							( errorObject ? "\n\nerrorObject: " + errorObject : "" ) +
 							addText +
@@ -156,7 +176,7 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 				return(false);
 			},
 			success: function(data) {
-				if (data.UniDB_fatalError != undefined) {
+				if (data && data.UniDB_fatalError != undefined) {
 					// error occured as a result of the command
 					D.destroyOverlay();
 					// now a dialog window will be shown:
@@ -166,13 +186,13 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 					if (typeof failCallback == "function") { failCallback(data.UniDB_fatalError); }
 					return(false);
 				}
-				if (data.UniDB_requestLogin != undefined) {
+				if (data && data.UniDB_requestLogin != undefined) {
 					// we need to (re-)login: show a login form, and this will - if successful - call the original command (again)
 					D.loginForm(method, path, parameters, callback, failCallback);
 					return(false);
 				}
 				// function to deal with the data
-				callback(data);
+				if (typeof callback == "function") { callback(data); }
 				// last step: re-enable form / remove overlay div
 				D.destroyOverlay();
 				return(true);
@@ -337,7 +357,7 @@ UniDB.prototype.menu = function () {
 						category = description.substr(0, description.indexOf(":")).trimRight();
 						description = description.substr(description.indexOf(":")+1).trimLeft();
 					}
-					$( "<a/>", { html: D.stripText(description) })
+					$( "<a/>", { html: D.stripText(description), title: description })
 						.appendTo(entry)
 						.on("click",function() {
 							tableObject.reset();
@@ -473,7 +493,7 @@ UniDB.prototype.showHome = function () {
 		.appendTo("#content")
 		.keypress(function(evnt) {
 			if (evnt.which == 13) {
-				D.cmd('PUT', '/query', undefined, { userQuery: true, sql: evnt.target.value }, function(response) {
+				D.cmd('POST', '/query', undefined, { userQuery: true, sql: evnt.target.value }, function(response) {
 					var newQuery = new Table(D, response.name, response.info);
 					D.Queries.push(newQuery);
 					newQuery.show();

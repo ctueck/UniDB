@@ -12,6 +12,7 @@ function Table (UniDB_instance, tableName, parameters) {
 	this.D = UniDB_instance;	// pointer to parent UniDB instance
 	this.tableName = tableName;	// SQL name
 	// parameters is an Object received from dbi.php:
+	this.section = parameters.section;		// "table" or "query"
 	this.description = parameters.description;	// Human-readable name
 	this.hidden = parameters.hidden;
 	this.priKey = parameters.priKey;
@@ -46,7 +47,7 @@ Table.prototype.show = function () {
 	// set UniDB Object's current Table to this one
 	T.D.currentTable = this;
 	// run query
-	T.D.cmd('GET', '/table/' + T.tableName, T.options, function (data) {
+	T.D.cmd('GET', '/' + T.section + '/' + T.tableName, T.options, function (data) {
 		// empty the content area and table-specific toolbars
 		$("#content").text("");
 		$("#tableinfo").text("");
@@ -92,9 +93,6 @@ Table.prototype.show = function () {
 		$("<button/>", { html: "Download" } )
 			.button({ icons: { primary: "ui-icon-arrowthickstop-1-s" }})
 			.click(function() { T.download(); })
-			.appendTo("#searchbar");
-		// blank form needed to POST files
-		$("<form/>", { id: "downloadOneForm", method: "POST", action: "dbi.php", enctype: "multipart/form-data" })
 			.appendTo("#searchbar");
 		// new record button (unless for VIEW's)
 		if (T.allowNew) {
@@ -154,11 +152,11 @@ Table.prototype.show = function () {
 				.click(	{ 	T:	(T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
 						value:	thisKey } , T.editFunction )
 				.appendTo(actButtons);
-			$("<button/>", { html: "Download" } )
+			$("<button/>", { html: "Fill template" } )
 				.button({	text:	false,
-						icons:	{ primary: "ui-icon-arrowthickstop-1-s" }})
+						icons:	{ primary: "ui-icon-copy" }})
 				.click(	{ 	T:	(T.underlyingTable ? T.D.T(T.underlyingTable) : T ) ,
-						value:	thisKey } , T.downloadOneMenu )
+						value:	thisKey } , T.downloadOneFunction )
 				.appendTo(actButtons);
 			if (T.allowDelete) {
 				$("<button/>", { html: "Delete" } )
@@ -184,7 +182,7 @@ Table.prototype.modify = function () {
 
 	if (this.userQuery) {	// if not userQuery, it cannot be modified
 		// first, we need to create a lock
-		T.D.cmd("lock", T.tableName, { }, function(lock) {
+		T.D.cmd('POST', '/' + T.section + '/' + T.tableName + '/lock', { }, function (lock) {
 			// if successful, we receive a hash that we later need to unlock
 			var lockHash = lock.hash;
 			// menu of tables & columns
@@ -240,20 +238,21 @@ Table.prototype.modify = function () {
 				      isPublic: { label: "Public?",	type: "checkbox",	value: T.isPublic }
 				};
 			new SimpleDialog(T.D, "edit-query", "Edit Query", form, function(dialog, callback) {
-				T.D.cmd("modify", T.tableName, { description:		dialog.Fields["description"].value(),
-								 sql:			dialog.Fields["sql"].value(),
-								 underlyingTable:	dialog.Fields["underlyingTable"].value(),
-								 saveQuery:		dialog.Fields["saveQuery"].value(),
-								 isPublic:		dialog.Fields["isPublic"].value() ,
-								 hash:			lockHash,
-								 userQuery:		true },
+				T.D.cmd("PUT", '/' + T.section + '/' + T.tableName,
+					       { description:		dialog.Fields["description"].value(),
+						 sql:			dialog.Fields["sql"].value(),
+						 underlyingTable:	dialog.Fields["underlyingTable"].value(),
+						 saveQuery:		dialog.Fields["saveQuery"].value(),
+						 isPublic:		dialog.Fields["isPublic"].value() ,
+						 hash:			lockHash,
+						 userQuery:		true },
 					function(result) {
 						T.constructor(T.D, T.tableName, result);
 						T.show();
 						callback();
 					});
 			}, function(dialog) {
-				T.D.cmd("unlock", T.tableName, { hash: lockHash }, function() {});
+				T.D.cmd('DELETE', '/' + T.section + '/' + T.tableName + '/lock', { hash: lockHash });
 			});
 		});
 	} else {
@@ -265,8 +264,12 @@ Table.prototype.modify = function () {
 Table.prototype.download = function () {
 	// we extend an empty object, in order not to modify the existing options, and the skip value is removed
 	// (= download is always complete)
-	window.location.href = "dbi.php?" + $.param($.extend({}, this.options,
-				{ "__UniDB": "download", "__table": this.tableName, "skip": undefined }));
+	this.D.cmd('GET', '/' + this.section + '/' + this.tableName, $.extend({ "download": true }, this.options),
+		function (data) {
+			var CSV = new Blob([ data ], { type: MIME_CSV } );
+			var url = URL.createObjectURL(CSV);
+			document.location = url;
+		}, undefined, MIME_CSV );
 	return(false);
 }
 
@@ -284,7 +287,6 @@ Table.prototype.download = function () {
 /* sortFunction(): sort by specified column */
 Table.prototype.sortFunction = function (evnt) {
 	var T = ( evnt.data.T ? evnt.data.T : this );
-	console.log(evnt.data);
 	T.options.order = ( evnt.data.desc ? evnt.data.column + " DESC" : evnt.data.column );
 	T.skip = 0;
 	T.show();
@@ -296,7 +298,7 @@ Table.prototype.deleteFunction = function (evnt) {
 	var options = {};
 	options[T.priKey] = evnt.data.value;
 	window.confirm("Are you sure you want to delete " + (evnt.data.name ? evnt.data.name : evnt.data.value)+"?")
-		&& T.D.cmd("DELETE", "/table/" + T.tableName + "/" + evnt.data.value, options, function () {
+		&& T.D.cmd("DELETE", "/" + T.section + "/" + T.tableName + "/" + evnt.data.value, options, function () {
 			T.show();	// afterwards, refresh the current view
 		} );
 	if (typeof evnt.stopPropagation === "function") { 
@@ -315,65 +317,74 @@ Table.prototype.editFunction = function(evnt) {
 	}
 }
 
-/* downloadOneMenu() : download the record specified, in server template or local file */
-Table.prototype.downloadOneMenu = function(evnt) {
-	console.log(evnt);
-	var T = ( evnt && evnt.data && evnt.data.T ? evnt.data.T : this );
-	if ($("#downloadOneMenu").data("isOpen")) {
-		$("#downloadOneMenu").data("isOpen",0).hide();
-	} else {
-		$("#downloadOneMenu").data("isOpen",1);
-		$("#downloadOneMenu").text("");
-		$.each(T.templates, function(undefined, template) {
-			$("<a/>", { html: template.description })
-				.appendTo("#downloadOneMenu")
-				.click( { T: T, key: evnt.data.key, value: evnt.data.value, template: template.name },
-					T.downloadOneFunction )
-				.wrap("<li/>");
-		});
-		$("<a/>", { html: "Upload file..." })
-			.appendTo("#downloadOneMenu")
-			.click( { T: T, key: evnt.data.key, value: evnt.data.value, template: undefined }, T.downloadOneFunction)
-			.wrap("<li/>");
-		$("#downloadOneMenu").menu("refresh")
-			.show()
-			.position({
-				my: "left top",
-				at: "left bottom",
-				of: evnt.currentTarget
-			});
-	}
-	if (typeof evnt.stopPropagation === "function") { 
-		evnt.stopPropagation();
-	}
+/* downloadOneFunction() : download record as ODF - function for file select event */
+Table.prototype.downloadOne = function(evnt) {
+
+	var T = $(evnt.target).data("T");
+	var keyColumn = $(evnt.target).data("key");
+	var keyValue = $(evnt.target).data("value");
+	var file = evnt.target.files[0];
+
+	JSZip.loadAsync(file).then(function(zip) {
+		if (metaFile = zip.file("meta.xml")) {
+			metaFile.async("string").then(
+				function(data) {
+					var metaXml = $.parseXML(data);
+					var metaContainer = metaXml.getElementsByTagNameNS(NS_ODF_OFFICE, "meta")[0];
+					var metaNodes = metaContainer.getElementsByTagNameNS(NS_ODF_META, "user-defined");
+					T.D.cmd("GET", "/" + T.section + "/" + T.tableName + "/" + keyValue,
+						{ "key": keyColumn, "download": true },
+						function (record) {
+							var metaOld = new Array;
+							for(var i = 0; i < metaNodes.length; i++) {
+								var metaName = metaNodes[i].getAttributeNS(NS_ODF_META, "name");
+								if (typeof record[metaName] != "undefined") {
+									metaOld.push(metaNodes[i]);
+								}
+							}
+							for(var i in metaOld) {
+								metaContainer.removeChild(metaOld[i]);
+							}
+							var metaPrefix = metaContainer.lookupPrefix(NS_ODF_META);
+							for(var metaName in record) {
+								var metaNew = document.createElementNS(NS_ODF_META, metaPrefix + ":user-defined");
+								metaNew.innerHTML = record[metaName];
+								metaNew.setAttributeNS(NS_ODF_META, metaPrefix + ":name", metaName);
+								metaNew.setAttributeNS(NS_ODF_META, metaPrefix + ":value-type", "string");
+								metaContainer.appendChild(metaNew);
+							}
+							var xs = new XMLSerializer();
+							zip.file("meta.xml", xs.serializeToString(metaXml));
+							zip.generateAsync({ type: 'blob', mimeType: MIME_ODF })
+								.then(function (blob) {			// 1) generate the zip file as Blob
+									var url = URL.createObjectURL(blob);
+									document.location = url;	// 2) download Blob
+								}, function (err) {
+									window.alert(err);
+								});
+						}, undefined);
+				},
+				function(e) {
+					window.alert("cannot read: "+e.message);
+				});
+		} else {
+			window.alert("File meta.xml not found, are you sure it's an OpenOffice document?");
+		}
+	}, function (e) {
+		window.alert("Error reading file: " + e.message);
+	});
 }
 
-/* downloadOneFunction() : download the record specified by data as ODF */
+/* downloadOneFunction() : download record as ODF - function for button event */
 Table.prototype.downloadOneFunction = function(evnt) {
 	var T = ( evnt.data.T ? evnt.data.T : this );
-	// close the menu
-	$("#downloadOneMenu").hide();
-	// clear form
-	$("#downloadOneForm").text("");
-	// add form fields
-	$("<input/>", { type: "hidden", name: "__UniDB", value: "downloadOne" })
-		.appendTo("#downloadOneForm");
-	$("<input/>", { type: "hidden", name: "__table", value: T.tableName })
-		.appendTo("#downloadOneForm");
-	$("<input/>", { type: "hidden", name: ( evnt.data.key ? evnt.data.key : T.priKey ), value: evnt.data.value })
-		.appendTo("#downloadOneForm");
-	if (evnt.data.template) {	// we want to download a template
-		$("<input/>", { type: "hidden", name: "__template", value: evnt.data.template })
-			.appendTo("#downloadOneForm");
-		$("#downloadOneForm").submit();
-	} else {			// we want to upload our own file
-		$("<input/>", { type: "hidden", name: "MAX_FILE_SIZE", value: "5000000" })
-			.appendTo("#downloadOneForm");
-		$("<input/>", { type: "file", name: "__odtfile" })
-			.appendTo("#downloadOneForm")
-			.change(function () { $("#downloadOneForm").submit(); })
-			.click();
-	}
+	var input = $(document.createElement("input"));
+	input.attr("type", "file")
+		.data("T", T)
+		.data("key", ( evnt.data.key ? evnt.data.key : T.priKey ))
+		.data("value", evnt.data.value )
+		.change(T.downloadOne)
+		.trigger("click"); // opening dialog
 	if (typeof evnt.stopPropagation === "function") { 
 		evnt.stopPropagation();
 	}

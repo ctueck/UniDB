@@ -271,10 +271,10 @@ class Column {
 						' ORDER BY fvalue';
 				$fkl = $this->D->dbh->query($query);
 				if (PEAR::isError($fkl)) {
-					$this->D->log($fkl->getMessage()."\n\n".$fkl->getUserinfo(),true);
+					$this->D->error($fkl->getMessage()."\n\n".$fkl->getUserinfo());
 				}
 				if (!isset($fkl)) {		// record not found
-					$this->D->log("record $key not found",true);
+					$this->D->error("record $key not found",404);
 				}
 				if ($this->is_nullable) {
 					$fieldset["options"][] = array(null, '[not assigned]');

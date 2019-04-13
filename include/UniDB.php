@@ -24,6 +24,20 @@ class UniDB {
 
 	protected $Debug;
 
+	/* routing table for REST API - NB: static! */
+	public static $routingTable = array(		// where to pass API calls
+			"log" =>	array(	"GET" => "get_log"	),
+			"tables" =>	array(	"GET" => "get_tables"	),
+			"queries" =>	array(	"GET" => "get_queries",
+						"POST" => "new_query"	),
+			"search" =>	array(	"GET" => "get_search"	),
+			"debug.echo" =>	array(	"GET" => "debug_echo",
+						"PUT" => "debug_echo",
+						"POST" => "debug_echo",
+						"DELETE" => "debug_forbidden" ),
+			"debug.dump" =>	array(	"GET" => "dumpObject" ),
+		);
+
 	/* Constructor */
 	function UniDB(&$config, $username = null, $password = null) {
 		/* log */
@@ -63,7 +77,7 @@ class UniDB {
 					WHERE table_schema = ".$this->dbh->quote($this->conf('db_name')));
 
 		if (PEAR::isError($r)) {
-			$this->log($r->getMessage(),true);
+			$this->error($r->getMessage());
 		}
 
 		// first: tables
@@ -186,26 +200,32 @@ class UniDB {
 		}
 	}
 
-	public function log($msg, $fatal = null) {
+	public function error($msg, $code = 500) {
+		// add error to log (this will decode PEAR errors)
+		$msg = $this->log($msg, true);
+		// set http code
+		http_response_code($code);
+		// return the last error as JSON object (full log should be retrieved via $this->printLog() )
+		header("Content-type: application/json");
+		die(json_encode(array(	"UniDB_fatalError" =>	$msg)));
+	}
+
+	public function log($msg, $fatal = false) {
 	/* add an entry to the log, and end execution if $fatal */
 		if (strlen($this->Debug) > $this->conf("logsize")) {	// rotate log if needed
 			$this->Debug = "[...]\n\n".substr($this->Debug, -$this->conf("logsize"));
 		}
+		// PEAR error can be passed directly and will be "decoded"
+		if (PEAR::isError($msg)) {
+			$msg = $msg->getMessage()."\n\n".$msg->getUserinfo();
+		}
+		// fatal messages will be formatted
 		if ($fatal) {
-			// add error to log
 			$this->Debug .= '<span style="color: red;">Fatal error: '. $msg . "</span>\n";
-			// if fatal is a string, use it as HTTP error code & text
-			if (is_string($fatal)) {
-				header("HTTP/1.1 $fatal");
-			} else {
-				header("HTTP/1.1 500 Undefined fatal error");	// otherwise, default
-			}
-			// return the last error as JSON object (full log should be retrieved via $this->printLog() ) 
-			header("Content-type: application/json");
-			die(json_encode(array(	"UniDB_fatalError" =>	$msg)));
 		} else {
 			$this->Debug .= $msg . "\n";
 		}
+		return($msg);
 	}
 
 	public function T($tableName) {
@@ -215,7 +235,7 @@ class UniDB {
 			$this->Tables[$tableName] = new Table($this, $tableName);
 		} elseif (!($this->Tables[$tableName] instanceof Table)) {
 			// RECURSION
-			$this->log("RECURSION DETECTED: Table '$tableName' called while being initialised.", true);
+			$this->error("RECURSION DETECTED: Table '$tableName' called while being initialised.");
 		}
 		return($this->Tables[$tableName]);
 	}
@@ -283,62 +303,11 @@ class UniDB {
 		return($query);
 	}
 
-	public function execCmd ($Method, $Section, $Object, $Id) {
-	/* execute a command specified in the query string, either from UniDB object or Table object */
-
-		// we can use either GET or POST
-		if ($Method == "GET") {
-			$options = $_GET;
-		} else {
-			$options = json_decode(file_get_contents("php://input"), true);
-		}
-
-		// log the whole array
-		//$this->log("execCmd: ".print_r($options,true));
-
-		$call_object = null;
-		$call_function = null;
-
-		switch ($Section) {
-			case 'table':
-				$call_object = ( isset($this->Tables[$Object]) ? $this->T($Object) : null );
-				$call_function = strtolower("api_".$Method);
-				break;
-			case 'query':
-				$call_object = ( isset($this->Queries[$table]) ? $this->Queries[$table] : null );
-				$call_function = strtolower("api_".$Method);
-				break;
-			case 'system':
-				$call_object = $this;
-				$call_function = strtolower($Method.'_'.$Object);
-				break;
-		}
-
-		if ( isset($call_object) ) {
-			if (isset($call_function) && is_callable(array($call_object,$call_function))) {
-				$this->log("Calling: (".get_class($call_object).")".$Object."->$call_function(Id=".(isset($Id)?$Id:"NULL").")");
-				$returnData = $call_object->$call_function($Id, $options);
-			} else {
-				$this->log("$call_function not implemented: $Method $Section/$Object/$Id", "404 Not found");
-				$returnData = array();
-			}
-		} else {				// no command - we just return an empty object
-			$this->log("no route to PHP object: $Method $Section/$Object/$Id", "404 Not found");
-			$returnData = array();
-		}
-
-		if (isset($returnData)) {
-			// return all as JSON data
-			header("Content-type: application/json");
-			echo(json_encode($returnData));
-		}
-	}
-
 	public function connect() {
 	/* connect to the database */
 		$this->dbh = MDB2::connect($this->dsn);
 		if (PEAR::isError($this->dbh)) {
-			$this->log($this->dbh->getUserInfo(), "401 Unauthorized");
+			$this->error($this->dbh->getUserInfo(),401);
 		}
 		$this->dbh->setFetchMode(MDB2_FETCHMODE_ASSOC);
 		$this->log("\nUniDB: connected to database");
@@ -388,7 +357,7 @@ class UniDB {
 				"queries" =>	( count($queries) > 0 ? $queries : null ) ) );
 	}
 
-	public function put_query($Id, $options) {
+	public function new_query($Id, $options) {
 		// create an ad-hoc Query
 		$newQuery = new SimpleQuery($this, $options);
 		$this->Queries[$newQuery->name] = $newQuery;
@@ -409,65 +378,137 @@ class UniDB {
 		return($matchList);
 	}
 
-	function resultToOdt($options, $r) {
-	// return SQL query result as meta data in an ODT file
+	/*********************************************** API **********************************************************/
+	/**** this function routes REST API calls to the appropriate internal function(s)                          ****/
+	/**************************************************************************************************************/
 
-		if (! (isset($_FILES['__odtfile']) || isset($options['__template'])) ) {
-			$this->log("cannot download single result: no file uploaded and no template specified",true);
+	protected function api_getResultContentType () {
+		$types_offered = array(	"application/json",
+					"text/plain",
+					"text/csv",
+					"text/html" );
+		$types_requested = explode(",", $_SERVER['HTTP_ACCEPT']);
+
+		foreach ($types_requested as $content_type) {
+			$content_type = trim($content_type);
+			if (strpos($content_type,";")) {
+				$content_type = substr($content_type,0,strpos($content_type,";"));
+			}
+			if (in_array($content_type,$types_offered)) {
+				return($content_type);
+			} elseif ($content_type == '*/*') {
+				return($types_offered[0]);
+			}
+		}
+		$this->error("Could not provide any of the content-types requested by client: [".
+			implode(",",$types_requested)."]", 406);
+		return(false);
+	}
+
+	public function api ($Method, $Section, $Object, $Id) {
+	/* execute a command specified in the query string, either from UniDB object or Table object */
+
+		// we can use either GET or POST/PUT - in the latter case, we have to read from STDIN
+		if ($Method == "GET" || $Method == "HEAD") {
+			$options = $_GET;
+		} else {
+			$options = json_decode(file_get_contents("php://input"), true);
 		}
 
-		define('NS_ODF_OFFICE',	'urn:oasis:names:tc:opendocument:xmlns:office:1.0');
-		define('NS_ODF_META',	'urn:oasis:names:tc:opendocument:xmlns:meta:1.0');
+		// now, need to determine which Object's routing table we'll use
+		$call_object = null;
+		$call_function = null;
 
-		$odtfile = new ZipArchive;
+		/******************* check object we'll have to call ***************************************/
 
-		if (isset($options['__template'])) {
-			$filename = basename($this->Templates[$options['__template']]['file']);
-			$filetype = $this->Templates[$options['__template']]['type'];
-			$filepath = tempnam(sys_get_temp_dir(), $filename);
-			if (!copy($this->Templates[$options['__template']]['file'], $filepath)) {
-				$this->log("could not create temporary file",true);
+		switch ($Section) {
+			case 'table':
+				$call_object = ( isset($this->Tables[$Object]) ? $this->T($Object) : null );
+				break;
+			case 'query':
+				$call_object = ( isset($this->Queries[$Object]) ? $this->Queries[$Object] : null );
+				break;
+			case 'system':
+				$call_object = $this;
+				$Id = $Object;
+				break;
+			default:
+				$this->error("Unknown section [$Section]",404);
+				break;
+		}
+
+		/******************* check routing table for the element specified by Id    ****************/
+
+		$call_class = get_class($call_object);
+		if (empty($Id) && isset($call_class::$routingTable["NULL"])) {
+			$route = $call_class::$routingTable["NULL"];
+		} elseif (isset($call_class::$routingTable[$Id])) {
+			$route = $call_class::$routingTable[$Id];
+		} elseif (isset($call_class::$routingTable["*"])) {
+			$route = $call_class::$routingTable["*"];
+		} else {
+			$this->error("Route for element [$Id] not defined, and no default route specified.", 404);
+		}
+
+		/******************* check function for this Method ***************************************/
+
+		// 1. special case: HEAD = GET, but we'll discard returnData later
+		if ($Method == "HEAD") {
+			$Method = "GET";
+			$method_is_HEAD = 1;
+		} else {
+			$method_is_HEAD = 0;
+		}
+		// 2. special case: OPTIONS = allowed for all, returning available methods
+		if ($Method == "OPTIONS") {
+			header("Allow: OPTIONS," . join(array_keys($route),","));
+			$returnData = null;
+		// regular case: check if method is defined
+		} else if (isset($route[$Method]) && is_callable(array($call_object,$route[$Method]))) {
+			$this->log("Calling: (".get_class($call_object).")".$Object."->".$route[$Method]."(Id=".(isset($Id)?$Id:"NULL").")");
+			$returnData = call_user_func(array($call_object, $route[$Method]), $Id, $options);
+		// if not defined: we'll return a 405 error
+		} else {
+			header("Allow: OPTIONS," . join(array_keys($route),","));
+			$this->error("Method [$Method] not defined for [$Object]:[$Id] in [$Section]", 405);
+		}
+
+		// determine preferred content type for returning the result
+		$resultContentType = $this->api_getResultContentType();
+
+		if (isset($returnData)) {
+			switch ($resultContentType) {
+				case "application/json" :	// encode all as JSON data
+					$json_returnData = json_encode($returnData);
+					break;
+				case "text/csv" :		// return in CSV format (only works with 2-dimensional array)
+					$csv = fopen('php://memory', 'r+');
+					foreach($returnData as $returnLine) {
+						fputcsv($csv, $returnLine);
+					}
+					rewind($csv);
+					$json_returnData = stream_get_contents($csv);
+					fclose($csv);
+					break;
+				case "text/plain" :		// not used in production, but who knows?
+					$json_returnData = print_r($returnData, true);
+					break;
+				case "text/html" :		// not used in production, but who knows?
+					$json_returnData = "<html><body><pre>".print_r($returnData, true)."</pre></body></html>";
+					break;
+				default :
+					$this->error("Use of content-type [$resultContentType] not properly defined", 500);
+			}
+			http_response_code(200);
+			header("Content-type: $resultContentType");
+			if ($method_is_HEAD) {
+				header("Content-Length: ".strlen($json_returnData));
+			} else {
+				echo($json_returnData);
 			}
 		} else {
-			$filepath = $_FILES['__odtfile']['tmp_name'];
-			$filename = $_FILES['__odtfile']['name'];
-			$filetype = $_FILES['__odtfile']['type'];
+			http_response_code(204);
 		}
-		$odtfile->open($filepath);
-
-		$metadata = new DOMDocument();
-		$metadata->loadXML($odtfile->getFromName('meta.xml'));
-
-		$metanode = $metadata->getElementsByTagNameNS(NS_ODF_OFFICE,'meta')->item(0);
-		$metaprefix = $metanode->lookupPrefix(NS_ODF_META);
-		$deleteNodes = array();
-		foreach ($metanode->childNodes as $element) {
-			if(array_key_exists($element->getAttributeNS(NS_ODF_META,'name'),$r)) {
-				$deleteNodes[] = $element;
-			}
-		}
-		foreach ($deleteNodes as $element) {
-			$metanode->removeChild($element);
-		}
-		foreach ($r as $field => $value) {
-			$newnode = $metadata->createElementNS(NS_ODF_META,$metaprefix.':user-defined', $value);
-			$newnode->setAttributeNS(NS_ODF_META,$metaprefix.':name',$field);
-			$newnode->setAttributeNS(NS_ODF_META,$metaprefix.':value-type','string');
-			$metanode->appendChild($newnode);
-		} // foreach (over all columns)
-
-		if ($odtfile->addFromString("meta.xml",$metadata->saveXML()) && $odtfile->close()) {
-
-			header("Content-type: $filetype");
-			header("Content-Disposition: attachment; filename=$filename");
-
-			readfile($filepath);
-			unlink($filepath);
-			flush();
-
-			return(null);
-		}
-
 	}
 
 	/*************************************** DEBUG functions *************************************************/
@@ -478,7 +519,12 @@ class UniDB {
 	public function dumpObject() {
 		header("Content-type: text/plain");
 		print_r($this);
-		return(null);
+	}
+	public function debug_echo($Id, $options) {
+		return($options);
+	}
+	public function debug_forbidden($Id, $options) {
+		$this->error("Call to (UniDB)debug_forbidden.", 403);
 	}
 	/**/
 

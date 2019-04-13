@@ -18,7 +18,10 @@ require 'include/UniDB.php';
 /*** parse headers and API path ***/
 $request_path = isset($_SERVER['PATH_INFO']) ? $_SERVER['PATH_INFO'] : null;
 $request_auth = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : null;
-# > Authorization: Bearer fds9shiis1go2grbi5c5kugdb1
+
+if (empty($request_auth) && isset($_COOKIE["UniDB-session"])) {
+	$request_auth = "Bearer ".$_COOKIE["UniDB-session"];
+}
 
 /* API URLs are generally constructed as:
  *
@@ -39,23 +42,23 @@ if ($Section == "login") {
 		// now we need a new session
 		session_start();
 
-		// get input and decode JSON
-		$input = json_decode(file_get_contents("php://input"), true);
+		$login = json_decode(file_get_contents("php://input"), true);
 
 		// initialise new UniDB object
-		$_SESSION['UniDB'] = new UniDB($UniDB_config, $input["username"], $input["password"]);
+		$_SESSION['UniDB'] = new UniDB($UniDB_config, $login["username"], $login["password"]);
 		
 		// if login was incorrect we should not get to here (error in DB connect would be fatal)
 		
 		// return the "message of the day"
 		header("Content-type: application/json");
 		echo(json_encode(array("UniDB_motd" => $_SESSION['UniDB']->connectInfo(),"session" => session_id())));
+	} else if ($_SERVER["REQUEST_METHOD"] == "OPTIONS") {
+		http_response_code(204);
+		header("Allow: POST,OPTIONS");
 	} else {
-		header("HTTP/1.1 405 Method Not Allowed");
-		header("Allowed: GET");
-		die();
+		http_response_code(405);
+		header("Allow: POST,OPTIONS");
 	}
-
 
 } else {	// not a log in request
 
@@ -74,7 +77,7 @@ if ($Section == "login") {
 					die(json_encode(array(	"UniDB_goodbye" => "[bye bye]" )));
 				} else {
 					// -> otherwise, simply pass command to UniDB instance:
-					$_SESSION['UniDB']->execCmd($_SERVER["REQUEST_METHOD"], $Section, $Object, $Id);
+					$_SESSION['UniDB']->api($_SERVER["REQUEST_METHOD"], $Section, $Object, $Id);
 				}
 			} else { // empty session or wrong session -> tell that user needs to log in
 				requestLogin("invalid session token, or session expired");
