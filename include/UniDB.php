@@ -240,6 +240,11 @@ class UniDB {
 		return($this->Tables[$tableName]);
 	}
 
+	public function tableUnset($tableName) {
+	/* needed if initialisation fails: remove from Tables array so the instance is not corrupted */
+		unset($this->Tables[$tableName]);
+	}
+
 	public function Q($queryName) {
 	/* return the Query object, if it exists */
 		return( isset($this->Queries[$queryName]) ? $this->Queries[$queryName] : null );
