@@ -20,8 +20,6 @@ class UniDB {
 
 	protected $Related = array();
 
-	public $Templates;
-
 	protected $Debug;
 
 	/* routing table for REST API - NB: static! */
@@ -56,19 +54,7 @@ class UniDB {
 
 		// connect to database
 		$this->connect();
-
 		// --- previous function will cause an error if login is incorrect
-
-		$this->log("UniDB: checking templates:\n");
-		// load templates (needs to be before table/query init)
-		foreach ($this->config['templates'] as $template) {
-			if (is_file($template['file'])) {
-				$this->Templates[$template['name']] = $template;
-				$this->log("[TEMPL] ".$template['name'].": ".$template['description']);
-			} else {
-				$this->log("WARNING: template '".$template['file']."' does not exist.");
-			}
-		}
 
 		$this->log("UniDB: initialising tables:\n");
 
@@ -445,7 +431,7 @@ class UniDB {
 		/******************* check routing table for the element specified by Id    ****************/
 
 		$call_class = get_class($call_object);
-		if (empty($Id) && isset($call_class::$routingTable["NULL"])) {
+		if (($Id == null) && isset($call_class::$routingTable["NULL"])) {
 			$route = $call_class::$routingTable["NULL"];
 		} elseif (isset($call_class::$routingTable[$Id])) {
 			$route = $call_class::$routingTable[$Id];

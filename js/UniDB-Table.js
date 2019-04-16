@@ -348,7 +348,7 @@ Table.prototype.downloadOne = function(evnt) {
 							var metaPrefix = metaContainer.lookupPrefix(NS_ODF_META);
 							for(var metaName in record) {
 								var metaNew = document.createElementNS(NS_ODF_META, metaPrefix + ":user-defined");
-								metaNew.innerHTML = record[metaName];
+								metaNew.textContent = record[metaName];
 								metaNew.setAttributeNS(NS_ODF_META, metaPrefix + ":name", metaName);
 								metaNew.setAttributeNS(NS_ODF_META, metaPrefix + ":value-type", "string");
 								metaContainer.appendChild(metaNew);

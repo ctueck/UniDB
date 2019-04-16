@@ -429,7 +429,7 @@ class Table {
 		// all column info
 		foreach ($r as $field => $value) {
 			if ($this->C($field)) {
-				$fieldset[$field] = $this->C($field)->fieldset($value);
+				$fieldset[$field] = $this->C($field)->fieldset($value, $r);
 			} else {
 				$this->D->error("Record contains unknown column '$field'. Probably the data structure changed since you logged in, please log out and relogin.");
 			}
