@@ -493,7 +493,7 @@ UniDB.prototype.showHome = function () {
 		.appendTo("#content")
 		.keypress(function(evnt) {
 			if (evnt.which == 13) {
-				D.cmd('POST', '/query', undefined, { userQuery: true, sql: evnt.target.value }, function(response) {
+				D.cmd('POST', '/system/queries', { userQuery: true, sql: evnt.target.value }, function(response) {
 					var newQuery = new Table(D, response.name, response.info);
 					D.Queries.push(newQuery);
 					newQuery.show();
