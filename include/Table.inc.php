@@ -57,9 +57,10 @@ class Table {
 		if ($this->conf('description')) {
 			$this->tableDescription = $this->conf('description');
 		} else {
-			$comment = $this->D->dbh->queryOne("SELECT table_comment FROM information_schema.tables
-					WHERE table_schema = ".$this->D->dbh->quote($this->D->dbName())."
-					AND   table_name   = ".$this->D->dbh->quote($this->tableName));
+			$comment = $this->D->query("SELECT table_comment FROM information_schema.tables
+					WHERE table_schema = ".$this->D->quote($this->D->dbName())."
+					AND   table_name   = ".$this->D->quote($this->tableName))
+					->fetchColumn();
 			$this->tableDescription = $comment ? $comment : $this->tableName;
 		}
 		
@@ -69,8 +70,8 @@ class Table {
 		$this->includeGlobalSearch = $this->tableHidden ? false : ( $this->conf('noGlobalSearch') ? false : true );
 
 		/* now, we analyse table description */
-		$r = $this->D->dbh->query("
-			SELECT		LOWER(columns.column_name) AS column_name, columns.column_comment, 
+		$r = $this->D->query("
+			SELECT		columns.column_name, columns.column_comment, 
 					columns.column_default, columns.is_nullable,
 					columns.data_type, columns.character_maximum_length, columns.numeric_precision,
 					columns.numeric_scale, columns.column_type, columns.column_key, columns.extra,
@@ -80,16 +81,16 @@ class Table {
 					AND (key_column_usage.table_name = columns.table_name)
 					AND (key_column_usage.column_name = columns.column_name)
 					AND (key_column_usage.referenced_table_name IS NOT NULL) )
-			WHERE		columns.table_schema = ".$this->D->dbh->quote($this->D->conf('db_name'))."
-			AND		columns.table_name = ".$this->D->dbh->quote($this->tableName)."
-			ORDER BY	columns.ordinal_position");
+			WHERE		columns.table_schema = ".$this->D->quote($this->D->conf('db_name'))."
+			AND		columns.table_name = ".$this->D->quote($this->tableName)."
+			ORDER BY	columns.ordinal_position", false);
 		
-		if ($r->numRows() == 0) {
+		if ($r == false) {
 			$this->D->tableUnset($name);
 			$this->D->error("Tried to initialise Table object for '".$this->tableName."', but does not exist in database.");
 		}
 
-		while ($row = $r->fetchRow()) {
+		foreach ($r as $row) {
 			// create new Column object for each
 			$this->Columns[$row['column_name']] = new Column($this, $row);
 			// add to columns to be shown in lists by default
@@ -219,6 +220,7 @@ class Table {
 				"hidden" =>		$this->tableHidden,
 				"priKey" =>		$this->priKey,
 				"searchable" =>		$this->searchable,
+				"includeGlobalSearch" => $this->includeGlobalSearch,
 				"underlyingTable" =>	$this->underlyingTable,
 				"allowNew" =>		$this->allowNew,
 				"allowEdit" =>		$this->allowEdit,
@@ -347,23 +349,19 @@ class Table {
 			// we were given a specific key other than the PRIMARY KEY ->
 			// need to check if it exits and is UNIQUE before we use it
 			if ($this->C($options["key"]) && $this->C($options["key"])->unique) {
-				$where = $this->tableName.".".$options["key"]." = ".$this->D->dbh->quote($Id);
+				$where = $this->tableName.".".$options["key"]." = ".$this->D->quote($Id);
 			} else {
 				$this->D->error("Tried to load record identified by [".$options["key"]."], but column ".
 				( $this->C($options["key"]) ? "is not UNIQUE." : "does not exist." ), 404);
 			}
 		} else {		// "normal" case: primary key used to identify record
-			$where = $this->tableName.".".$this->priKey." = ".$this->D->dbh->quote($Id);
+			$where = $this->tableName.".".$this->priKey." = ".$this->D->quote($Id);
 		}
-		$query .= "\nWHERE " . $where;
+		$query .= "\nWHERE " . $where . "\nLIMIT 1";
 
-		$this->D->dbh->setLimit(1);
-		$r = $this->D->dbh->queryRow($query);
+		$r = $this->D->query($query)->fetch();
 
-		if (PEAR::isError($r)) {
-			$this->D->error($r);
-		}
-		if (!isset($r)) {		// record not found
+		if ($r == false) {		// record not found
 			$this->D->error("record not found",404);
 		}
 		return($r);
@@ -376,27 +374,23 @@ class Table {
 			// we were given a specific key other than the PRIMARY KEY ->
 			// need to check if it exits and is UNIQUE before we use it
 			if ($this->C($options["key"]) && $this->C($options["key"])->unique) {
-				$where = $this->tableName.".".$options["key"]." = ".$this->D->dbh->quote($Id);
+				$where = $this->tableName.".".$options["key"]." = ".$this->D->quote($Id);
 			} else {
 				$this->D->error("Tried to load record identified by [".$options["key"]."], but column ".
 				( $this->C($options["key"]) ? "is not UNIQUE." : "does not exist." ), 404);
 			}
 		} else {		// "normal" case: primary key used to identify record
-			$where = $this->tableName.".".$this->priKey." = ".$this->D->dbh->quote($Id);
+			$where = $this->tableName.".".$this->priKey." = ".$this->D->quote($Id);
 		}
 
 		$this->D->log("Loading record ".$this->tableName."(".$where.")");
 
 		// basic query
-		$query = "SELECT ".$this->tableName.".* FROM ".$this->tableName." WHERE ".$where;
+		$query = "SELECT ".$this->tableName.".* FROM ".$this->tableName." WHERE ".$where." LIMIT 1";
 
-		$this->D->dbh->setLimit(1);	// normally not needed, but just in case
-		$r = $this->D->dbh->queryRow($query);
+		$r = $this->D->query($query)->fetch();
 
-		if (PEAR::isError($r)) {
-			$this->D->error($r);
-		}
-		if (!isset($r)) {		// record not found
+		if ($r == false) {		// record not found
 			$this->D->error("record not found",404);
 		}
 
@@ -459,14 +453,20 @@ class Table {
 				// we'll update all columns that are not PRIMARY KEYS, not timestamps and that are actually supplied
 				if ( ($column->name != $this->priKey)
 					&& ($column->data_type != 'timestamp')
-					&& isset($options[$column->name]) ) {
-						$query .= $column->name . " = " . $this->D->dbh->quote($options[$column->name]) . ", ";
+					&& array_key_exists($column->name, $options) ) {
+					$query .= $column->name . " = " . (
+						isset($options[$column->name])
+						? $this->D->quote($options[$column->name])
+						: (
+							$column->is_nullable
+							? 'NULL'
+							: 'DEFAULT'
+						) ) . ", ";
 				}
 			}
 			$query = substr($query,0,-2);	// cut off trailing ", "
-			$query .= " WHERE $this->priKey = ".$this->D->dbh->quote($Id);
-		
-			$this->D->dbh->setLimit(1);	// precaution only
+			$query .= " WHERE $this->priKey = ".$this->D->quote($Id);
+			$query .= " LIMIT 1";
 
 		} else {					// new record
 
@@ -483,7 +483,7 @@ class Table {
 				if ( ($column->name != $this->priKey) && ($column->data_type != 'timestamp') ) {
 					$insertColumns[] = $column->name;
 					if (isset($options[$column->name])) {
-						$insertValues[] = $this->D->dbh->quote($options[$column->name]);
+						$insertValues[] = $this->D->quote($options[$column->name]);
 					} else {
 						$insertValues[] = "NULL";
 					}
@@ -493,13 +493,10 @@ class Table {
 			
 		}
 
-		$r = $this->D->dbh->exec($query);
-		if (PEAR::isError($r)) {
-			$this->D->error($r);
-		}
+		$r = $this->D->query($query)->rowCount();
 
 		// log query
-		$this->D->log($this->D->dbh->last_query.' // '.$r.' row(s) affected');
+		$this->D->log("$query // $r row(s) affected");
 
 		/* you'd expect 'if ($r == 0) { error... }' here, but the problem is that 0 rows affected could mean 2 things:
 		    a. record does not exist
@@ -507,10 +504,7 @@ class Table {
 		   in case of a. error will occur in next step, trying to editRecord. thus, no problem that this cannot be caught here */
 
 		if (!isset($Id)) {		// this was a new record
-			$Id = $this->D->dbh->lastInsertID();
-			if (PEAR::isError($Id)) {
-				$this->D->error($Id);
-			}
+			$Id = $this->D->lastInsertId();
 		}
 
 		// return the PRIMARY KEY
@@ -529,13 +523,9 @@ class Table {
 			$this->D->error("record not specified",404);
 		}
 
-		$query = "DELETE FROM $this->tableName WHERE $this->priKey = ".$this->D->dbh->quote($Id);
-		$this->D->dbh->setLimit(1);	// precaution only
+		$query = "DELETE FROM $this->tableName WHERE $this->priKey = ".$this->D->quote($Id)." LIMIT 1";
 
-		$r = $this->D->dbh->exec($query);
-		if (PEAR::isError($r)) {
-			$this->D->error($r);
-		}
+		$r = $this->D->query($query)->rowCount();
 
 		// log query
 		$this->D->log($this->D->dbh->last_query.' // '.$r.' row(s) affected');

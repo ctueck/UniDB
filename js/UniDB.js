@@ -46,6 +46,17 @@ $.widget( "custom.catcomplete", $.ui.autocomplete, {
 			}
 			that._renderItemData( ul, item );
 		});
+	},
+	_suggest: function( items ) {
+		var ul = this.menu.element.empty();
+		this._renderMenu( ul, items );
+		this.isNewMenu = true;
+		this.menu.refresh();
+		// size and position menu
+		ul.show();
+		if ( this.options.autoFocus ) {
+			this.menu.next();
+		}
 	}
 });
 
@@ -67,12 +78,14 @@ function UniDB(dbiUrl) {
 	D.sessionId = D.cookies.hasItem("UniDB-session") ? D.cookies.getItem("UniDB-session") : null;
 
 	// prepare the general dialog window
-	D.dialogWindow = $("#dialog_window").dialog({
+	D.dialogWindow = $("#dialog_window").dialog({ autoOpen: false });
+	/*.dialog({
 		autoOpen: false,
-		width: "80%",
-		resizable: true,
+		maxHeight: $("body").height(),
+		width: $("body").width() * 0.8,
+		resizable: false,
 		modal: true
-	});
+	});*/
 	// prepare the query editor window
 	/*D.queryWindow = $("#query_window").dialog({
 		autoOpen: false,
@@ -92,6 +105,7 @@ function UniDB(dbiUrl) {
 	D.Tables = {};
 	D.cmd('GET', "/system/tables", undefined, function (data) {
 		D.Config = data.uiconfig;	// configuration passed from PHP
+		D.motd = data.UniDB_motd
 		// data.tables is an Object, with the SQL name as key and the description as value
 		for (var tableName in data.tables) {
 			D.Tables[tableName] = new Table(D, tableName, data.tables[tableName]);
@@ -100,9 +114,99 @@ function UniDB(dbiUrl) {
 
 		// check if we are logged in: will be done implicitly by menu function
 		D.menu();
-		// show the home screen
-		D.showHome();
+
+		// set up navigation
+		D.path = new Object;
+		$(window).on("hashchange", D, D.doAction);
+		D.doAction();
 	});
+
+}
+
+/* navigate to specific view - changes hash, then doAction() will trigger desired action */
+UniDB.prototype.navigate = function(section, object, options) {
+	var newHash = "#/" + encodeURIComponent(section) + "/" + encodeURIComponent(object) + "/";
+	for(var i in options) {
+		if (Array.isArray(options[i])) {
+			for(var j in options[i]) {
+				newHash = newHash + encodeURIComponent(i) + "=" + encodeURIComponent(options[i][j]) + "/";
+			}
+		} else if (typeof options[i] == "object") {
+			for(var j in options[i]) {
+				newHash = newHash + encodeURIComponent(i) + "="  + encodeURIComponent(j) + "="+ encodeURIComponent(options[i][j]) + "/";
+			}
+		} else if (options[i] != null) {
+			newHash = newHash + encodeURIComponent(i) + "=" + encodeURIComponent(options[i]) + "/";
+		}
+	}
+	window.location.hash = newHash;
+}
+
+/* listener for hashchange event, change view accordingly */
+UniDB.prototype.doAction = function(evnt) {
+
+	if (evnt) {
+		var D = evnt.data;
+	} else {
+		var D = this;
+	}
+
+	// check parameters
+	if (window.location.hash.length > 1) {
+		if (window.location.hash.substr(0,2) != "#/") {
+			console.log("malformed address, redirecting to home");
+			window.location.hash = "#";
+			return;
+		}
+		var components = window.location.hash.substr(2).split("/");
+		D.path = {	"section"	: decodeURIComponent(components[0]),
+				"object"	: decodeURIComponent(components[1]),
+				"options"	: new Object };
+		var options = components.slice(2);
+		for(var i in options) {
+			if (options[i].length > 0) {
+				var option = options[i].split("=");
+				if (option.length == 1) {
+					D.path.options[decodeURIComponent(option[0])] = true;
+				} else if (option.length == 2) {
+					if (typeof D.path.options[decodeURIComponent(option[0])] == "undefined") {
+						D.path.options[decodeURIComponent(option[0])] = decodeURIComponent(option[1]);
+					} else if (typeof D.path.options[decodeURIComponent(option[0])] == "object") {
+						D.path.options[decodeURIComponent(option[0])].push(decodeURIComponent(option[1]));
+					} else {
+						D.path.options[decodeURIComponent(option[0])] = [ D.path.options[decodeURIComponent(option[0])] ];
+						D.path.options[decodeURIComponent(option[0])].push(decodeURIComponent(option[1]));
+					}
+				} else if (option.length == 3) {
+					if (typeof D.path.options[decodeURIComponent(option[0])] == "undefined") {
+						D.path.options[decodeURIComponent(option[0])] = { };
+					}
+					D.path.options[decodeURIComponent(option[0])][decodeURIComponent(option[1])] = decodeURIComponent(option[2]);			
+				}
+			}
+		}
+		var object = null;
+		if (D.path.section == "table") {
+			object = D.T(D.path.object);
+		} else if (D.path.section == "query") {
+			object = D.Q(D.path.object);
+		} else if (D.path.section == "logout") {
+			D.logout();
+			return;
+		} else {
+			console.log("Section [" + D.path.section + "] unknown.");
+			return;
+		}
+		if (object != null) {
+			object.options = D.path.options;
+			object.show();
+		} else {
+			console.log("Object [" + D.path.object + "] not found in section [" + D.path.section + "].");
+		}
+	} else {
+		D.showHome();
+	}
+
 }
 
 /*****
@@ -110,10 +214,12 @@ function UniDB(dbiUrl) {
  *****/
 
 /* the main helper: run UniDB command on the server */
-UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback, returnType) {
+UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback, returnType, requestHeaders, noOverlay) {
 	var D = this;	// safe in separate variable, since "this" points to sth else in callbacks
 
-	this.createOverlay();	// activate overlay to grey out screen
+	if (! noOverlay) {
+		this.createOverlay();	// activate overlay to grey out screen
+	}
 
 	// return type is JSON unless otherwise specified
 	if (typeof returnType == "undefined") {
@@ -123,6 +229,10 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 	if (typeof parameters == "undefined") {			// make empty Object if not given
 		parameters = { };
 	}
+	// additional request headers
+	if (typeof requestHeaders == "undefined") {			// make empty Object if not given
+		requestHeaders = { };
+	}
 
 	if ( (! D.sessionId) && (path != "/login") && (path != "/login/") ) {
 		// we don't have a session token, and neither is the present call to the login
@@ -131,7 +241,7 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 		D.loginForm(method, path, parameters, callback, failCallback);
 	} else {
 		// we have a sessionID, or we're logging in - let's go
-		var requestHeaders = { "Accept": returnType };
+		requestHeaders["Accept"] = returnType;
 		if (D.sessionId) {
 			// pass our session token in Auth header
 			requestHeaders["Authorization"] = "Bearer " + D.sessionId;
@@ -175,7 +285,7 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 				}
 				return(false);
 			},
-			success: function(data) {
+			success: function(data, statusText, jqxhr) {
 				if (data && data.UniDB_fatalError != undefined) {
 					// error occured as a result of the command
 					D.destroyOverlay();
@@ -192,7 +302,7 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 					return(false);
 				}
 				// function to deal with the data
-				if (typeof callback == "function") { callback(data); }
+				if (typeof callback == "function") { callback(data, jqxhr); }
 				// last step: re-enable form / remove overlay div
 				D.destroyOverlay();
 				return(true);
@@ -221,7 +331,6 @@ UniDB.prototype.loginForm = function (method, path, options, callback, failCallb
 					D.sessionId = data.session;	// this session ID will be our token
 					D.cookies.setItem("UniDB-session", D.sessionId);
 					D.motd = data.UniDB_motd;	// motd (usually connect info)
-					$("#motd").text(D.motd);
 					// if login successful we call the original command (which triggered the login)
 					D.cmd(method, path, options, callback, failCallback);
 				}
@@ -240,9 +349,16 @@ UniDB.prototype.logout = function () {
 			D.cookies.removeItem("UniDB-session");
 			D.sessionId = null;
 			$("#motd").text(data.UniDB_goodbye);
+			window.location.hash = '#';
+			window.location.reload();
+		}, function() {
+			window.location.hash = '#';
+			window.location.reload();
 		});
 	} else {
 		window.alert("you're already logged out...");
+		window.location.hash = '#';
+		window.location.reload();
 	}
 }
 
@@ -253,6 +369,11 @@ UniDB.prototype.logout = function () {
 /* T(): return Table object, this is basically a shortcut and similar to the equivalent function in PHP UniDB class */
 UniDB.prototype.T = function (tableName) {
 	return(this.Tables[tableName]);
+}
+
+/* Q(): return Query object */
+UniDB.prototype.Q = function (queryName) {
+	return(this.Queries[queryName]);
 }
 
 UniDB.prototype.createOverlay = function() {
@@ -291,13 +412,15 @@ UniDB.prototype.stripText = function(text, htmlMode, trailingText) {
 
 /* initialise query objects (on log in or when changes loaded from server) */
 UniDB.prototype.initQueries = function(queries) {
-	// empty array
-	this.Queries = [];
+	// empty object and array
+	this.Queries = {};
+	this.QueriesAlpha = [];
 	// data.queries is an Object, with the internal name as key and the description as value
 	for (var queryName in queries) {
-		this.Queries.push(new Table(this, queryName, queries[queryName]));
+		this.Queries[queryName]= new Table(this, queryName, queries[queryName]);
+		this.QueriesAlpha.push(this.Queries[queryName]);
 	}
-	this.Queries.sort(function(a, b) {
+	this.QueriesAlpha.sort(function(a, b) {
 		var nameA = a.description.toUpperCase(); // ignore upper and lowercase
 		var nameB = b.description.toUpperCase(); // ignore upper and lowercase
 		if (nameA < nameB) {
@@ -318,121 +441,134 @@ UniDB.prototype.initQueries = function(queries) {
 UniDB.prototype.menu = function () {
 	var D = this;	// safe in separate variable, since "this" points to sth else in callbacks
 
-	var menuContainer = $("#menu");	// PROVISIONAL HARD-CODED
+	var menuPri = $("#menu_primary");
+	var menuSec = $("#menu_secondary");
 
 	// empty container
-	menuContainer.text("");
+	menuPri.text("");
+	menuSec.text("");
 	// set logout and show log buttons
-	$("<button/>", { id: "btnLogout", html: "Logout" })
-		.button({ icons: { primary: "ui-icon-power" } })
-		.on("click", function() { D.logout(); } )
-		.prependTo(menuContainer);
-	$("<button/>", { id: "btnLog", html: "Show log" })
+	$("<a/>", { id: "btnLogout", text: "Logout", href: "#/logout" })
+		.button({ text: false, icons: { primary: "ui-icon-power" } })
+		.prependTo(menuSec);
+	$("<a/>", { id: "btnLog", text: "Log" })
 		.button({ icons: { primary: "ui-icon-script" } })
-		.on("click", function() { D.printLog(); } )
-		.prependTo(menuContainer);
+		.on("click", D, D.printLog)
+		.prependTo(menuSec);
 	// menu of queries 
 	var menuQueries = $( "<ul/>", { id: "menuQueries" });
 	menuQueries.hide()	// hide (pops up when we click button)
 		.menu()
-		.prependTo(menuContainer);
-	$( "<button/>", { "role": "button", id: "btnQueries", html: "Queries" })
-		.button({ icons: { primary: "ui-icon-search" }})
+		.prependTo(menuPri);
+	$( "<a/>", { "role": "button", id: "btnQueries", html: "Queries" })
+		.button({ icons: { primary: "ui-icon-search", secondary: "ui-icon-carat-1-s" }})
 		.on("click",function(evnt) {
-			// update queries from server
-			D.cmd('GET', '/system/queries', { mtime: D.mtime } , function (data) {
-				D.mtime = data.mtime;
-				if (data.queries) {
-					D.initQueries(data.queries);
-				}
-				// empty menu
-				$("#menuQueries").text("");
-				var subMenus = { };
-				// generate new entry for each query
-				$.each(D.Queries, function (queryName, tableObject) { //for (var table in D.Tables) {
-					var entry = $("<li/>");
-					var category = null;
-					var description = tableObject.description;
-					if (description.indexOf(":") > -1) {
-						category = description.substr(0, description.indexOf(":")).trimRight();
-						description = description.substr(description.indexOf(":")+1).trimLeft();
-					}
-					$( "<a/>", { html: D.stripText(description), title: description })
-						.appendTo(entry)
-						.on("click",function() {
-							tableObject.reset();
-							tableObject.show();
-						})
-					// edit submenu
-					if (tableObject.userQuery) {
-						$("<a/>", { html: "Edit", "class": "ui-icon-pencil" } )
-							.appendTo(entry)
-							.on("click",function() {
-								tableObject.modify();
-							})
-							.wrap($("<ul/>", { "class": "small" }))
-							.wrap($("<li/>"));
-					}
-					if (category != null) {
-						if (subMenus[category] == undefined) {
-							subMenus[category] = $("<ul/>");
+			if (menuQueries.prop("style").display == 'block') {
+				menuQueries.hide();
+			} else {
+				// update queries from server
+				D.cmd('GET', '/system/queries', undefined, function (data, jqxhr) {
+					if (jqxhr.status != "304" && data.queries) {
+						D.mtime = jqxhr.getResponseHeader("Last-Modified");
+						D.initQueries(data.queries);
+						// empty menu
+						$("#menuQueries").text("");
+						var subMenus = { };
+						// generate new entry for each query
+						$.each(D.QueriesAlpha, function (queryName, tableObject) { //for (var table in D.Tables) {
+							var entry = $("<li/>");
+							var category = null;
+							var description = tableObject.description;
+							if (description.indexOf(":") > -1) {
+								category = description.substr(0, description.indexOf(":")).trimRight();
+								description = description.substr(description.indexOf(":")+1).trimLeft();
+							}
+							$( "<a/>", {	html: D.stripText(description),
+									href: "#/query/" + tableObject.tableName,
+									title: description })
+								.appendTo(entry);
+								/*.on("click",function() {
+								tableObject.reset();
+								tableObject.show();
+								})*/
+							// edit submenu
+							if (tableObject.userQuery) {
+							$("<a/>", { html: "Edit", "class": "ui-icon-pencil" } )
+								.appendTo(entry)
+								.on("click",function() {
+									tableObject.modify();
+								})
+								.wrap($("<ul/>", { "class": "small" }))
+								.wrap($("<li/>"));
+							}
+							if (category != null) {
+								if (subMenus[category] == undefined) {
+									subMenus[category] = $("<ul/>");
+								}
+								entry.appendTo(subMenus[category]);
+							} else {
+								entry.appendTo($("#menuQueries"));
+							}
+						});
+						for (var category in subMenus) {
+							var entry = $("<li/>");
+							$("<a/>", { html: category })
+								.appendTo(entry);
+							subMenus[category].appendTo(entry);
+							entry.prependTo($("#menuQueries"));
 						}
-						entry.appendTo(subMenus[category]);
-					} else {
-						entry.appendTo($("#menuQueries"));
 					}
-				});
-				for (var category in subMenus) {
-				//$.each(subMenus, function(category, subMenu) {
-					var entry = $("<li/>");
-					$("<a/>", { html: category })
-						.appendTo(entry);
-					subMenus[category].appendTo(entry);
-					entry.prependTo($("#menuQueries"));
-				}
-				$("#menuQueries").menu("refresh")
-					.show()
-					.position({
-						my: "left top",
-						at: "left bottom",
-						of: evnt.currentTarget
-					});
-			});
+					$("#menuTables").hide();
+					$("#menuQueries").menu("refresh")
+						.show()
+						.position({
+							my: "left top",
+							at: "left bottom",
+							of: evnt.currentTarget
+						});
+				}, undefined, undefined, { "If-Modified-Since": D.mtime } );
+			}
 			// important: otherwise the next handler would be called and hides the menu again...
 			evnt.stopPropagation();
 		})
-		.prependTo(menuContainer);
+		.prependTo(menuPri);
 	// menu of tables
 	var menuTables = $( "<ul/>", { id: "menuTables" });
 	$.each(D.Tables, function (table, tableObject) { //for (var table in D.Tables) {
 		if (!tableObject.hidden) {
-			$( "<a/>", { html: tableObject.description })
+			$( "<a/>", {	html: tableObject.description,
+					href: "#/table/" + tableObject.tableName })
 				.appendTo(menuTables)
-				.on("click",function() {
+				/*.on("click",function() {
 					tableObject.reset();
 					tableObject.show();
-				})
+				})*/
 				.wrap($("<li/>"));
 		}
 	});
 	menuTables.hide()	// hide (pops up when we click button)
 		.menu()		// make it a menu
-		.prependTo(menuContainer);
-	$( "<button/>", { "role": "button", id: "btnTables", html: "Tables" })
-		.button({ icons: { primary: "ui-icon-calculator" }})
+		.prependTo(menuPri);
+	$( "<a/>", { "role": "button", id: "btnTables", html: "Tables" })
+		.button({ icons: { primary: "ui-icon-calculator", secondary: "ui-icon-carat-1-s" }})
 		.on("click",function(evnt) {
-			menuTables.show().position({
-				my: "left top",
-				at: "left bottom",
-				of: this
-			});
+			$("#menuQueries").hide();
+			if (menuTables.prop("style").display == 'block') {
+				menuTables.hide();
+			} else {
+				menuTables.show().position({
+					my: "left top",
+					at: "left bottom",
+					of: this
+				});
+			}
 			// important: otherwise the next handler would be called and hides the menu again...
 			evnt.stopPropagation();
 		})
-		.prependTo(menuContainer);
+		.prependTo(menuPri);
 	// blank menu for download via templates
 	$("<ul/>", { id: "downloadOneMenu" })
-		.appendTo(menuContainer)
+		.appendTo(menuPri)
 		.menu()
 		.hide();
 	// if we click anywhere else, the menu should be hidden
@@ -442,10 +578,9 @@ UniDB.prototype.menu = function () {
 		$("#downloadOneMenu").hide();
 	});
 	// home button
-	$("<button/>", { id: "btnHome", html: "Home" })
-		.button({ icons: { primary: "ui-icon-home" } })
-		.on("click", function() { D.showHome(); } )
-		.prependTo(menuContainer);
+	$("<a/>", { id: "btnHome", html: "Home", href: "#" })
+		.button({ text: false, icons: { primary: "ui-icon-home" } })
+		.prependTo(menuPri);
 }
 
 /* showHome(): show the home screen, including global search field */
@@ -461,20 +596,35 @@ UniDB.prototype.showHome = function () {
 	//this.debugWindow.dialog("close");
 	// set current table to none
 	this.currentTable = undefined;
-	// empty the content area and table-specific toolbars
-	$("#content").text("");
-	$("#tableinfo").text("");
-	$("#navbar").text("");
-	$("#searchbar").text("");
+	// empty the content area and table-specific toolbars, and add motd
+	$("#content").text("").addClass("homepage");
+	$("#table_info").text("");
+	$("#table_nav").text("");
+	$("#table_buttons").text("");
+	$("#table_search").text("");
+	$("#motd").text(D.motd);
+	$("<div/>", { id: "global_search" }).appendTo("#content");
 	// global search
 	$("<input/>", { id: "search_term", type: "text", placeholder: "Search ..." })
 		.prop("size","40")
-		.appendTo("#content")
+		.appendTo("#global_search")
 		.catcomplete({
-			delay: 500,
+			appendTo: $("#content"),
+			delay: 250,
 			minLength: 3,
 			source: function(request, response) {
-				D.cmd('GET', '/system/search', { search: request.term }, response);
+				D.cmd('GET', '/system/search', { search: request.term }, function(data) {
+					$.each(D.Tables, function (table, tableObject) { //for (var table in D.Tables) {
+						if (tableObject.includeGlobalSearch && tableObject.allowNew) {
+							data.push({	table:		table,
+									key:		tableObject.priKey,
+									value:		null,
+									category:	"Create new record",
+									label:		tableObject.description });
+						}
+					});
+					response(data);
+				}, undefined, undefined, undefined, true);
 			},
 			select: function(evnt, selection) {
 				var T = ( D.T(selection.item.table).underlyingTable ?
@@ -485,8 +635,7 @@ UniDB.prototype.showHome = function () {
 				$("#search_term").val("");
 				return(false);
 			}
-		})
-		.wrap($("<div/>", { id: "global_search" }));
+		});
 	// ad-hoc query
 	$("<input/>", { id: "adhoc_sql", type: "text", placeholder: "SELECT * FROM ..." })
 		.prop("size","40")
@@ -495,7 +644,8 @@ UniDB.prototype.showHome = function () {
 			if (evnt.which == 13) {
 				D.cmd('POST', '/system/queries', { userQuery: true, sql: evnt.target.value }, function(response) {
 					var newQuery = new Table(D, response.name, response.info);
-					D.Queries.push(newQuery);
+					D.Queries[response.name] = newQuery;
+					D.QueriesAlpha.push(newQuery);
 					newQuery.show();
 				});
 				return(false);
@@ -505,8 +655,8 @@ UniDB.prototype.showHome = function () {
 }
 
 /* printLog(): show the PHP backend log in a window */
-UniDB.prototype.printLog = function () {
-	var D = this;	// safe in separate variable, since "this" points to sth else in callbacks
+UniDB.prototype.printLog = function (evnt) {
+	var D = (evnt && evnt.data) ? evnt.data : this;	// safe in separate variable, since "this" points to sth else in callbacks
 
 	D.cmd('GET', '/system/log', undefined, function(data) {
 		new SimpleDialog(	D,
