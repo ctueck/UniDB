@@ -168,7 +168,7 @@ Field.prototype.showField = function(target) {
 	} // switch
 
 	// event handler: change color when content is changed
-	this.input.change(function(e) {
+	this.input.on("input", function(e) {
 		if (realThis.value() != realThis.oldValue) {	// value changed
 			$(e.currentTarget).addClass("changed-value");
 		} else {
@@ -176,22 +176,23 @@ Field.prototype.showField = function(target) {
 		}
 	});
 
+	// add <input> to outer container
 	this.input.appendTo(outerDiv);
 	
 	// create a download button if this is the PRIMARY KEY
 	if (this.R && this.name == this.R.T.priKey) {
-		$("<a/>", { href: "#", text: "Fill template", "class": "foreign-table-button" })
+		$("<a/>", { text: "Fill template", "class": "foreign-table-button" })
 			.button({ text: false, icons: { primary: "ui-icon-copy" }})
 			.click(	{ T: this.R.T, value: this.oldValue }, this.R.T.downloadOneFunction )
 			.appendTo(outerDiv);
 	}
 	// make a related records and an edit button, if this is a FOREIGN KEY
 	if (this.foreign_table != undefined) {
-		$("<a/>", { href: "#", text: "Related records", "class": "foreign-table-button" } )
+		$("<a/>", { text: "Related records", "class": "foreign-table-button" } )
 			.button({ text: false, icons: { primary: "ui-icon-folder-open" }})
 			.click( { T: this.R.T, relatedColumn: this.name, value: this.oldValue }, this.R.T.relatedFunction )
 			.appendTo(outerDiv);
-		$("<a/>", { href: "#", text: (this.R.T.allowEdit ? "Edit" : "View" ),  "class": "foreign-table-button" } )
+		$("<a/>", { text: (this.R.T.allowEdit ? "Edit" : "View" ),  "class": "foreign-table-button" } )
 			.button({ text: false, icons: { primary: (this.R.T.allowEdit ? "ui-icon-pencil" : "ui-icon-search") }})
 			.click(	{	T:	this.R.T.D.T(this.foreign_table),
 					value:	this.oldValue,

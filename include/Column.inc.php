@@ -283,25 +283,23 @@ class Column {
 						? ' WHERE ('. ( is_array($fullRecord)           // apply replacement, if given
 						? strtr($this->foreign_select_condition, $replTable)
 						: $this->foreign_select_condition ).
-						') OR ( '.$this->foreign_key.' = '.$this->D->dbh->quote($value).' )' : '' ).
+						') OR ( '.$this->foreign_key.' = '.$this->D->quote($value).' )' : '' ).
 						' ORDER BY fvalue';
-				$fkl = $this->D->dbh->query($query);
-				if (PEAR::isError($fkl)) {
-					$this->D->error($fkl->getMessage()."\n\n".$fkl->getUserinfo());
-				}
-				if (!isset($fkl)) {		// record not found
+				$fkl = $this->D->query($query);
+				if ($fkl == false) {		// record not found *** CHECK THIS ***
 					$this->D->error("record $key not found",404);
 				}
 				if ($this->is_nullable) {
 					$fieldset["options"][] = array(null, '[not assigned]');
 				}
-				while ($entry = $fkl->fetchRow()) {
+				foreach ($fkl as $entry) {
 					$fieldset["options"][] = array($entry['fkey'], $entry['fvalue']);
 				}
 			} else {
 				$fieldset["type"] = "readonly";
-				$fkValue = $this->D->dbh->queryOne('SELECT '.$this->D->T($this->foreign_table)->defName.' FROM '.
-					$this->foreign_table.' WHERE ('.$this->foreign_key.' = '.$this->D->dbh->quote($value).' )');
+				$fkValue = $this->D->query('SELECT '.$this->D->T($this->foreign_table)->defName.' FROM '.
+					$this->foreign_table.' WHERE ('.$this->foreign_key.' = '.$this->D->quote($value).' )')
+					->fetchColumn();
 				$fieldset["foreign_value"] = $fkValue;
 				$fieldset["size"] = ( strlen($fkValue) > $this->D->conf("maxinputsize") ? $this->D->conf("maxinputsize") : strlen($fkValue) );
 			}
@@ -315,6 +313,45 @@ class Column {
 			$fieldset["options"] = $this->choices;
 		} // if
 		return($fieldset);
+	}
+
+	public function filter () {
+	// return list for filter drop-down
+		if (isset($this->choices)) {
+			$choices = $this->choices;
+		} elseif ($this->data_type == 'text') {
+			return(false);
+		} elseif ($this->data_type == 'boolean') {
+			$choices[] = array(1, 'Yes');
+			$choices[] = array(null, 'No');
+		} else {
+			$choices = array();
+			if ($this->is_nullable) {
+				$choices[] = array(null, '[not assigned]');
+			}
+			if (isset($this->foreign_key)) {
+				$fkl = $this->D->query(	'SELECT DISTINCT '.$this->T->tableName.'.'.$this->name.' AS fkey, '.
+							$this->foreign_table.'.'.$this->D->T($this->foreign_table)->defName.' AS fvalue '.
+							' FROM '.$this->T->tableName.
+							' LEFT JOIN '.$this->foreign_table.' ON '.$this->foreign_table.'.'.
+							$this->foreign_key.' = '.$this->T->tableName.'.'.$this->name.
+							' WHERE '.$this->T->tableName.'.'.$this->name.' IS NOT NULL'.
+							' ORDER BY fvalue' );
+				foreach ($fkl as $entry) {
+					$choices[] = array($entry['fkey'], $entry['fvalue']);
+				}
+			} else {
+				$values = $this->D->query('SELECT DISTINCT '.$this->name.' AS value'.
+							  ' FROM '.$this->T->tableName.
+							  ' WHERE '.$this->name.' IS NOT NULL'.
+							  ' ORDER BY value' );
+				foreach ($values as $entry) {
+					$choices[] = array($entry['value'], $entry['value']);
+				}
+			}
+		}
+		return(array(	'column' =>	$this->T->tableName.'.'.$this->name,
+				'choices' =>	$choices));
 	}
 
 	protected function conf ($var) {

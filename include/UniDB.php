@@ -1,8 +1,5 @@
 <?php
 
-// MDB2 is our backend
-require 'MDB2.php';
-
 // different UniDB objects
 require 'Query.inc.php';
 require 'Column.inc.php';
@@ -12,11 +9,12 @@ class UniDB {
 
 	protected $config;
 
-	protected $dsn;
-	public $dbh;
+	protected $pdo;
+	protected $dbh;
 
 	protected $Tables = array();
 	protected $Queries = array();
+	protected $queriesLastModified = false;
 
 	protected $Related = array();
 
@@ -45,12 +43,11 @@ class UniDB {
 		$this->config = $config;
 
 		/* DSN from config constants */
-		$this->dsn = array(	'phptype' => 'mysql',
-					'username' => (isset($username) ? $username : $this->conf('db_user')),
-					'password' => (isset($password) ? $password : $this->conf('db_pass')),
-					'hostspec' => $this->conf('db_host'),
-					'database' => $this->conf('db_name'),
-					'charset' => 'utf8' );
+		$this->pdo = array(	'url' =>	'mysql:host='.$this->conf('db_host').
+							';dbname='.$this->conf('db_name').';charset=UTF8',
+					'username' =>	(isset($username) ? $username : $this->conf('db_user')),
+					'password' =>	(isset($password) ? $password : $this->conf('db_pass')),
+			);
 
 		// connect to database
 		$this->connect();
@@ -59,19 +56,15 @@ class UniDB {
 		$this->log("UniDB: initialising tables:\n");
 
 		/* get list of tables */
-		$r = $this->dbh->query("SELECT table_name FROM information_schema.tables
-					WHERE table_schema = ".$this->dbh->quote($this->conf('db_name')));
-
-		if (PEAR::isError($r)) {
-			$this->error($r->getMessage());
-		}
+		$r = $this->query("SELECT table_name FROM information_schema.tables
+					WHERE table_schema = ".$this->quote($this->conf('db_name')));
 
 		// first: tables
-		while ($row = $r->fetchRow(MDB2_FETCHMODE_ORDERED)) {
-			if (! $this->conf('ignore', $row[0])) {
-				$this->T($row[0])->initQuery();
+		while ($row = $r->fetchColumn()) {
+			if (! $this->conf('ignore', $row)) {
+				$this->T($row)->initQuery();
 			} else {
-				$this->log("[IGN]   ".$row[0]);
+				$this->log("[IGN]   ".$row);
 			}
 		}
 
@@ -101,21 +94,21 @@ class UniDB {
 
 	public function connectInfo () {
 	/* return info on connection - for display in UI */
-		return("Connected: ".$this->dsn['username']."@".$this->dsn['hostspec'].":".$this->dsn['database']);
+		return("Connected: ".$this->pdo['username']."@".$this->conf('db_host').":".$this->conf('db_name'));
 	}
 
 	public function loggedUser () {
 	/* return username of DB connection @ remote host */
-		return($this->dsn['username'].'@'.$_SERVER['REMOTE_ADDR']);
+		return($this->pdo['username'].'@'.$_SERVER['REMOTE_ADDR']);
 	}
 
 	public function dbName () {
 	/* return name of the DB we're logged in to */
-		return($this->dsn['database']);
+		return($this->conf('db_name'));
 	}
 
 	public function userQueryDir() {
-		$userQueryDir = ( $this->conf('userquerydir') ?: 'config/queries' ) . '/' . $this->dsn['username'] . '.d';
+		$userQueryDir = ( $this->conf('userquerydir') ?: 'config/queries' ) . '/' . $this->pdo['username'] . '.d';
 		if (!is_dir($userQueryDir)) {
 			mkdir($userQueryDir);
 		}
@@ -130,46 +123,43 @@ class UniDB {
 		return( $publicQueryDir );
 	}
 
-	public function loadQueries($mtime = null) {
-		$newQueries = false;
+	public function loadQueries() {
 		// read user queries
+		$this->log("queriesLastModified=".$this->queriesLastModified);
+		$mtime = $this->queriesLastModified ? $this->queriesLastModified : null;
 		if (isset($mtime)) {
-			$this->log("Updating queries:");
+			$this->log("Updating queries changed since $mtime:");
+			foreach($this->Queries as $queryName => $queryObject) {
+				$filename = $queryObject->saveQuery ?
+						( $queryObject->isPublic ?
+							$this->publicQueryDir() :
+							$this->userQueryDir()
+						) . '/' . $queryName
+						: false;
+				$filetime = $filename ? filemtime($filename) : false;
+				if (max($queryObject->mtime, $filetime) > $mtime) {
+					$this->log("CHANGE $queryName file=".$filetime." session=".$queryObject->mtime." (".$queryObject->description.")");
+					if ($filetime > $queryObject->mtime) {
+						$this->log("       (file is newer => reload)");
+						$newQuery = new SimpleQuery($this, unserialize(file_get_contents($filename)), $filetime);
+						$this->Queries[$newQuery->name] = $newQuery;
+					}
+					$this->queriesLastModified = max($this->queriesLastModified, $queryObject->mtime, $filetime);
+				} else {
+					$this->log("====== $queryName file=".$filetime." session=".$queryObject->mtime." (".$queryObject->description.")");
+				}
+			}
 		} else {
-			$this->log("Loading queries from '".$this->userQueryDir()."':");
+			$this->log("Loading only queries not loaded before:");
 		}
-		foreach(glob($this->userQueryDir().'/*') as $filename) {
-			if (!isset($mtime) || filemtime($filename) > $mtime) {
-				$newQuery = new SimpleQuery($this, unserialize(file_get_contents($filename)));
+		// load all user & public queries not yet in session
+		foreach( array_merge(glob($this->userQueryDir().'/*'), glob($this->publicQueryDir().'/*')) as $filename) {
+			if (!isset($this->Queries[basename($filename)])) {
+				$newQuery = new SimpleQuery($this, unserialize(file_get_contents($filename)), filemtime($filename));
 				$this->Queries[$newQuery->name] = $newQuery;
-				$newQueries = true;
+				$this->queriesLastModified = max($this->queriesLastModified, filemtime($filename));
 			}
 		}
-		// read public queries
-		if (!isset($mtime)) {
-			$this->log("Loading queries from '".$this->publicQueryDir()."':");
-		}
-		foreach(glob($this->publicQueryDir().'/*') as $filename) {
-			if (!isset($mtime) || filemtime($filename) > $mtime) {
-				$newQuery = new SimpleQuery($this, unserialize(file_get_contents($filename)));
-				$this->Queries[$newQuery->name] = $newQuery;
-				$newQueries = true;
-			}
-		}
-		// compatibility mode: read user queries from old-style file
-		$compatfile = ($this->conf('userquerydir') ?: 'config/queries' ) . '/' . $this->dsn['username'];
-		if (is_file($compatfile) && ( !isset($mtime) || filemtime($compatfile) > $mtime ) ) {
-			$newQueries = true;
-			$this->log("Loading queries from old-style file '".$compatfile."':");
-			// old-style query file
-			foreach(unserialize(file_get_contents($compatfile)) as $queryconf) {
-				$newQuery = new SimpleQuery($this, $queryconf);
-				$this->Queries[$newQuery->name] = $newQuery;
-				$this->Queries[$newQuery->name]->save();
-			}
-			unlink($compatfile);
-		}
-		return($newQueries);
 	}
 
 	public function conf($var, $table = null, $column = null) {
@@ -187,7 +177,7 @@ class UniDB {
 	}
 
 	public function error($msg, $code = 500) {
-		// add error to log (this will decode PEAR errors)
+		// add error to log
 		$msg = $this->log($msg, true);
 		// set http code
 		http_response_code($code);
@@ -196,18 +186,21 @@ class UniDB {
 		die(json_encode(array(	"UniDB_fatalError" =>	$msg)));
 	}
 
-	public function log($msg, $fatal = false) {
+	public function log($msg, $warning = false) {
 	/* add an entry to the log, and end execution if $fatal */
 		if (strlen($this->Debug) > $this->conf("logsize")) {	// rotate log if needed
 			$this->Debug = "[...]\n\n".substr($this->Debug, -$this->conf("logsize"));
 		}
-		// PEAR error can be passed directly and will be "decoded"
-		if (PEAR::isError($msg)) {
-			$msg = $msg->getMessage()."\n\n".$msg->getUserinfo();
+		// $msg can be error/exception or PDO error
+		if ($msg instanceof Throwable) {
+			$msg = $msg->getMessage();
+		} elseif ($msg instanceof PDO || $msg instanceof PDOStatement) {
+			$sql_error = $msg->errorInfo();
+			$msg = $sql_error[0]."(driver:".$sql_error[1].") ".$sql_error[2];
 		}
-		// fatal messages will be formatted
-		if ($fatal) {
-			$this->Debug .= '<span style="color: red;">Fatal error: '. $msg . "</span>\n";
+		// warning messages will be formatted
+		if ($warning) {
+			$this->Debug .= '<span style="color: red;">'. $msg . "</span>\n";
 		} else {
 			$this->Debug .= $msg . "\n";
 		}
@@ -260,9 +253,9 @@ class UniDB {
 		if (isset($this->Related[$table])) {
 			foreach ($this->Related[$table] as $rt) {
 				$rt["value"] = $fieldset[$rt["column"]]["value"];
-				$rt["count"] = $this->dbh->queryOne("SELECT COUNT(*) FROM ".$rt["relatedTable"]." WHERE ".
+				$rt["count"] = $this->query("SELECT COUNT(*) FROM ".$rt["relatedTable"]." WHERE ".
 						$rt["relatedColumn"]." = ".
-						$this->dbh->quote($rt["value"]));
+						$this->dbh->quote($rt["value"]))->fetchColumn();
 				$related[] = $rt;
 				$this->log(" - ".$rt["relatedTable"].": ".$rt["count"]);
 			}
@@ -296,12 +289,51 @@ class UniDB {
 
 	public function connect() {
 	/* connect to the database */
-		$this->dbh = MDB2::connect($this->dsn);
-		if (PEAR::isError($this->dbh)) {
-			$this->error($this->dbh->getUserInfo(),401);
+		try {
+			$this->dbh = new PDO($this->pdo['url'], $this->pdo['username'], $this->pdo['password']);
+			$this->dbh->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+		} catch (PDOException $e) {
+			$this->error($e->getMessage(), 405);
 		}
-		$this->dbh->setFetchMode(MDB2_FETCHMODE_ASSOC);
 		$this->log("\nUniDB: connected to database");
+	}
+
+	public function quote($s) {
+	/* wrapper for PDO quote function */
+		return($this->dbh->quote($s));
+	}
+
+	public function lastInsertId() {
+	/* wrapper for PDO lastInsertId() function */
+		return($this->dbh->lastInsertId());
+	}
+
+	public function query($query, $dieOnError = true) {
+	/* query the database, handle errors and return PDOStatement object */
+		$result = $this->dbh->query($query);
+
+		if ($result == false) {
+			if ($dieOnError) {
+				// error() will terminate
+				$this->error($this->dbh);
+			} else {
+				// log() as warning but do not terminate
+				$this->log($this->dbh, true);
+			}
+		}
+		return($result);
+	}
+
+	public function __sleep () {
+	/* determine what to serialise: basically everything except PDO handle */
+		return(array(
+			'config',
+			'pdo',
+			'Tables',
+			'Queries',
+			'Related',
+			'Debug',
+		));
 	}
 
 	public function __wakeup () {
@@ -313,9 +345,7 @@ class UniDB {
 	/* returning data in JSON format                                                                            */
 
 	public function get_log() {
-		$log = $this->Debug;
-		$this->Debug = "";
-		return(array("UniDB_log" => $log));
+		return(array("UniDB_log" => $this->Debug));
 	}
 
 	public function get_tables() {
@@ -329,23 +359,27 @@ class UniDB {
 	}
 
 	public function get_queries($Id, $options) {
-		if (isset($options["mtime"])) {
-			$mtime = $options["mtime"];
+		if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
+			$mtime = strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']);
 		} else {
 			$mtime = null;
 		}
-		$queries = array();
-		$newtime = time();
-		if ($this->loadQueries($mtime)) {
-			$this->log("new queries loaded - returning array.");
+		// first, we refresh queries
+		$this->loadQueries();
+		// return query info if last change > time given by client
+		if (!isset($mtime) || $this->queriesLastModified > $mtime) {
+			$this->log("=> ".(isset($mtime) ? "new queries found" : "no If-Modified-Since header" )." - returning query info.");
+			$queries = array();
 			foreach ($this->Queries as $name => $q) {
 				$queries[$name] = $q->getInfo();
 			}
+			header("Last-Modified: ".strftime("%a, %d %b %Y %H:%M:%S %Z",$this->queriesLastModified));
+			return(array(	"mtime" =>	$this->queriesLastModified,
+					"queries" =>	( count($queries) > 0 ? $queries : null ) ) );
 		} else {
-			$this->log("no new queries.");
+			$this->log("=> no new queries");
+			return(304);
 		}
-		return(array(	"mtime" =>	$newtime,
-				"queries" =>	( count($queries) > 0 ? $queries : null ) ) );
 	}
 
 	public function new_query($Id, $options) {
@@ -467,7 +501,7 @@ class UniDB {
 		// determine preferred content type for returning the result
 		$resultContentType = $this->api_getResultContentType();
 
-		if (isset($returnData)) {
+		if (is_array($returnData)) {
 			switch ($resultContentType) {
 				case "application/json" :	// encode all as JSON data
 					$json_returnData = json_encode($returnData);
@@ -497,6 +531,8 @@ class UniDB {
 			} else {
 				echo($json_returnData);
 			}
+		} elseif (is_int($returnData)) {
+			http_response_code($returnData);
 		} else {
 			http_response_code(204);
 		}

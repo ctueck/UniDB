@@ -152,27 +152,26 @@ Dialog.prototype.show = function () {
 						});
 					}
 			} ,
-			/*{ text:		"Download",
-			  icon:		"ui-icon-arrowthickstop-1-s",
-			  click:	function(evnt) {
-						evnt.data = {	T:	realThis.mainRecord.T ,
-								value:	realThis.mainRecord.key };
-			  			realThis.mainRecord.T.downloadOneMenu(evnt);
-					}
-			} ,*/
 			{ text:		"Cancel",
 			  icon:		"",
 			  click:	function() {
 						realThis.jqDialog.dialog("close");
 					}
-			} ] );
+			}
+		] );
 	}
 
 	// remove any possible close function left over
 	this.jqDialog.off("dialogclose");
 
 	// finall, open the dialog window
-	this.jqDialog.dialog("open");
+	this.jqDialog.dialog({
+		autoOpen: true,
+		maxHeight: $("body").height(),
+		width: $("body").width() * 0.8,
+		resizable: false,
+		modal: true
+	});
 }
 
 /* save(): recursively save all records */

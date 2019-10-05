@@ -68,6 +68,17 @@ SimpleDialog.prototype.show = function () {
 	}
 	this.jqDialog.dialog("option", "buttons", buttons);
 
+	// create handler for ENTER key
+	editForm.off("keydown");
+	editForm.on("keydown", function(e) {
+		if (e.key == "Enter") {
+			realThis.disable();
+			realThis.applyFunction(realThis, function() {
+				realThis.jqDialog.dialog("close");
+			});
+		}
+	});
+
 	// link close function to close button
 	this.jqDialog.off("dialogclose");
 	if (typeof realThis.closeFunction == 'function') {
@@ -76,7 +87,13 @@ SimpleDialog.prototype.show = function () {
 		});
 	}
 	// finall, open the dialog window
-	this.jqDialog.dialog("open");
+	this.jqDialog.dialog({
+		autoOpen: true,
+		maxHeight: $("body").height(),
+		width: $("body").width() * 0.8,
+		resizable: false,
+		modal: true
+	});
 }
 
 // disable(): 

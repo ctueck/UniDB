@@ -10,6 +10,7 @@ class SimpleQuery {
 	public $saveQuery;		// flag: save query?
 	public $isPublic;		// flag: public query?
 	public $underlyingTable = null;	// set underlying main table (to edit records later on)
+	public $mtime;			// last-modified timestamp
 
 	public $sqlQuery;		// the actual query stub (built by constructor, w/o WHERE and ORDER BY)
 
@@ -47,6 +48,7 @@ class SimpleQuery {
 		$this->saveQuery = ( isset($queryConf['saveQuery']) ? $queryConf['saveQuery'] : false );
 		$this->isPublic = ( isset($queryConf['isPublic']) ? $queryConf['isPublic'] : false );
 		$this->underlyingTable = ( isset($queryConf['underlyingTable']) && strlen($queryConf['underlyingTable']) > 0 ? $queryConf['underlyingTable'] : null );
+		$this->mtime = time();
 
 		$this->initialise($queryConf);
 
@@ -71,22 +73,6 @@ class SimpleQuery {
 		}
 		$this->D->log("[QUERY] ".$this->name.": ".$this->description);
 
-		// copy template definitions
-		/*if (isset($queryConf['templates'])) {
-			$loadTemplates = $queryConf['templates'];
-		} else*/if (isset($this->underlyingTable)) {
-			$loadTemplates = $this->D->conf('templates', $this->underlyingTable);
-		}
-		if (isset($loadTemplates) && is_array($loadTemplates)) {
-			foreach ($loadTemplates as $template) {
-				if (isset($this->D->Templates[$template])) {
-					$this->D->log("+ $template");	
-					$this->Templates[$template] = $this->D->Templates[$template];
-				} else {
-					$this->D->log("Warning: template '$template' is not defined");	
-				}
-			}
-		}
 	}
 
 	/* internal functions */
@@ -125,17 +111,15 @@ class SimpleQuery {
 
 		// initialise
 		$query = $this->sqlQuery;
-		$filterInfo = "";
 
 		// insert search conditions, if search term given
 		if (isset($options['search']) && (strlen($options['search']) > 0) && $this->searchable) {
 			$query = preg_replace(array('/\/\*+/','/\*+\//'), '', $query);
 			$query = preg_replace('/\%s/', $options['search'], $query);
-			$filterInfo = " (matching '".$options['search']."')";
 		} elseif ($this->searchable) {
 			$query = preg_replace('/\/\*+.*?\*+\//', '', $query);
 		} elseif (isset($options['search']) && (strlen($options['search']) > 0)) {
-			$this->D->log("[warning] search term on non-searchable query - will have no effect.");
+			$this->D->log("Search term on non-searchable query - will have no effect.", true);
 		}
 
 		if (isset($options['order'])) {	// ordering chosen in UI
@@ -146,48 +130,38 @@ class SimpleQuery {
 		return(array(	'query' =>		$query,
 				'options' =>		$options,
 				'fullResult' =>		$fullResult,
-				'filterInfo' =>		$filterInfo,
 				'countQuery' =>		null,
-				'columnNames' =>	null ));
+				'columns' =>		null ));
 	}
 
 	protected function run ($argument) {
 		/* the function actually executing the query, as prepared by prepareQuery() */
 		$query = $argument['query'];
 		$countQuery = $argument['countQuery'];
-		$columnNames = $argument['columnNames'];
+		$columnInfo = $argument['columns'];
 		$options = $argument['options'];
 		$fullResult = $argument['fullResult'];
 
 		$result = array();
-		$result['filterInfo'] = $argument['filterInfo'];
 		$result['nameColumn'] = $this->nameColumn;
 
 		if ($fullResult) {	// full result = skip no rows, and no need to determine total rows before
 			$skipRows = 0;
 		} else {		// view mode = check total results (provided in UI) and set rows to skip
 			if (isset($countQuery)) {	// if we have a countQuery, we can just run it ...
-				$totalRows = $this->D->dbh->queryOne($countQuery);
+				$totalRows = $this->D->query($countQuery)->fetchColumn();
 			} else {			// ... otherwise we need to run the whole query, without LIMIT
-				$r = $this->D->dbh->query($query);
-				if (PEAR::isError($r)) {
-					$this->D->error($r);
-				} else {
-					$totalRows = $r->numRows();
-				}
+				$r = $this->D->query($query);
+				$totalRows = $r->rowCount();
 			}
 			$skipRows = isset($options['skip']) ? $options['skip'] : 0;
-			$this->D->dbh->setLimit($this->D->conf("pageresults"), $skipRows);
+			$query .= "\nLIMIT ".$this->D->conf("pageresults")." OFFSET $skipRows";
 		}
 
 		// now, run the main query
-		$r = $this->D->dbh->query($query);
+		$r = $this->D->query($query);
 		
-		if (PEAR::isError($r)) {
-			$this->D->error($r);
-		}
-
-		$this->D->log("\n".$this->D->dbh->last_query." // returned ".$r->numRows()." rows");
+		$this->D->log("\n$query // returned ".$r->rowCount()." rows");
 
 		// now the real result - first metadata and navigation
 		if (! $fullResult) {
@@ -195,7 +169,7 @@ class SimpleQuery {
 			$result["pageUp"] = ($skipRows - $this->D->conf("pageresults") >= 0
 						? $skipRows - $this->D->conf("pageresults") : 0 );
 			$result["firstRecord"] = $skipRows + 1;
-			$result["lastRecord"] = $skipRows + $r->numRows();
+			$result["lastRecord"] = $skipRows + $r->rowCount();
 			$result["totalRecords"] = $totalRows;
 			$result["pageDown"] = ($skipRows + $this->D->conf("pageresults") < $totalRows
 						? $skipRows + $this->D->conf("pageresults") : $skipRows );
@@ -204,27 +178,35 @@ class SimpleQuery {
 		}
 
 		$result["columns"] = array();
-		foreach (array_keys($r->getColumnNames()) as $column) {
+		for ($i = 0; $i < $r->columnCount(); $i++) {
+			$column = $r->getColumnMeta($i)["name"];
 			if ( !isset($this->underlyingTable)
-			  || ($column !=  strtolower($this->underlyingTable."_".$this->D->T($this->underlyingTable)->priKey) )
+			  || ($column !=  ($this->underlyingTable."_".$this->D->T($this->underlyingTable)->priKey) )
 			  || $fullResult ) {	// skip primary key, unless full result requested
-				$result["columns"][] = array(	"name" =>	$column,
-								"description" =>
-							( isset($columnNames) ? $columnNames[count($result["columns"])] : $column ) );
+				$result["columns"][] = array(
+					"name" =>	 $column,
+					"description" => ( isset($columnInfo) ?
+							   $columnInfo[count($result["columns"])]["description"] : $column ),
+					"filter" =>	 ( isset($columnInfo) ?
+							   $columnInfo[count($result["columns"])]["filter"] : null )
+				);
 			}
 		}
 
 		// the data itself
 		$result["keys"] = array();
 		$result["data"] = array();
-		while ($row = $r->fetchRow()) {
+		foreach ($r as $row) {
 			// set keys for edit/open and delete
 			if (isset($this->underlyingTable)) {
 				// for normal tables and VIEWs that have one, the PRIMARY KEY is the key
-				$result["keys"][] = 
-					isset($row[strtolower($this->underlyingTable."_".$this->D->T($this->underlyingTable)->priKey)]) ?
-					$row[strtolower($this->underlyingTable."_".$this->D->T($this->underlyingTable)->priKey)] :
-					$row[strtolower($this->D->T($this->underlyingTable)->priKey)];
+				if (isset($row[$this->underlyingTable."_".$this->D->T($this->underlyingTable)->priKey])) {
+					$result["keys"][] = $row[$this->underlyingTable."_".$this->D->T($this->underlyingTable)->priKey];
+				} elseif (isset($row[$this->D->T($this->underlyingTable)->priKey])) {
+					$result["keys"][] = $row[$this->D->T($this->underlyingTable)->priKey];
+				} else {
+					$this->D->error("Malconfigured query: main table assigned, but primary key not in SELECT columns", 500);
+				}
 			} else {
 				// for VIEWs, we just make up a key as an index 
 				$result["keys"][] = $skipRows + count($result["keys"]);
@@ -233,7 +215,7 @@ class SimpleQuery {
 			$rowData = array();
 			foreach ($row as $c => $v) {
 				if ( !isset($this->underlyingTable)
-				  || ($c !=  strtolower($this->underlyingTable."_".$this->D->T($this->underlyingTable)->priKey) )
+				  || ($c != ($this->underlyingTable."_".$this->D->T($this->underlyingTable)->priKey) )
 				  || $fullResult ) {	// hide primary key, unless full result requested
 					$rowData[] = $v;
 				}
@@ -331,7 +313,7 @@ class SimpleQuery {
 		if ($queryConf['hash'] != $readLock['hash']) {
 			$this->D->error("Cannot save query, locked by ".$readLock['by']." until ".$readLock['until'].". Maybe your lock expired and another user locked it in between.", 403);
 		}
-		// to modify, we re-run the constructor
+		// to modify, we re-run the constructor (this will also update mtime)
 		$this->__construct($this->D, $queryConf);
 		// save modification, if needed
 		$this->save();
@@ -417,9 +399,7 @@ class SimpleQuery {
 
 		if (isset($options['key']) && $options['key'] != "_count") {
 			$skipRows = 0;
-			$options['filterTable'] = $this->underlyingTable;
-			$options['filterColumn'] = $this->priKey;
-			$options['filterValue'] = $options[$this->priKey];
+			$options['filter'][$this->underlyingTable.'.'.$this->priKey] = $options[$this->priKey];
 		} else {
 			$options['key'] = "_count";
 			$skipRows = $Id;
@@ -427,13 +407,10 @@ class SimpleQuery {
 
 		$realQuery = $this->prepareQuery($options, true);
 
-		$this->D->dbh->setLimit(1, $skipRows);
-		$r = $this->D->dbh->queryRow($realQuery['query']);
+		$realQuery['query'] .= "\nLIMIT 1 OFFSET $skipRows";
+		$r = $this->D->query($realQuery['query'])->fetch();
 
-		if (PEAR::isError($r)) {
-			$this->D->error($r);
-		}
-		if (!isset($r)) {		// record not found
+		if ($r == false) {		// record not found
 			$this->D->error("record not found",404);
 		}
 
@@ -449,17 +426,14 @@ class SimpleQuery {
 
 		$realQuery = $this->prepareQuery($options, true);
 
-		$this->D->dbh->setLimit(1, $Id);	// we want one result and skip all preceding ones
-		$r = $this->D->dbh->queryRow($realQuery['query']);
+		$realQuery['query'] .= "\nLIMIT 1 OFFSET $Id"; // we want one result and skip all preceding ones
+		$r = $this->D->query($realQuery['query'])->fetch();
 
-		if (PEAR::isError($r)) {
-			$this->D->error($r);
-		}
-		if (!isset($r)) {		// record not found
+		if ($r == false) {		// record not found
 			$this->D->error("record not found", 404);
 		}
 
-		$this->D->log("\n".$this->D->dbh->last_query." // returned 1 row");
+		$this->D->log("\n".$realQuery['query']." // returned 1 row");
 
 		/* now we build a fieldset as required by the UI */
 
@@ -473,8 +447,8 @@ class SimpleQuery {
 			$fieldset[$field]["type"] = "pre";
 			if ($field == $this->priKey) {
 				$fieldset[$field]["label"] = "#";
-			} elseif (isset($realQuery['columnNames'])) {
-				$fieldset[$field]["label"] = $realQuery['columnNames'][$i];
+			} elseif (isset($realQuery['columns'])) {
+				$fieldset[$field]["label"] = $realQuery['columns'][$i]['description'];
 				$i++;
 			} else {
 				$fieldset[$field]["label"] = $field;
@@ -494,9 +468,7 @@ class Query extends SimpleQuery {
 	public $downloadQuery;			// full query for download
 	public $countQuery;			// query stub for returning the number of results
 
-	//public $displayColumns = array();	// Column objects - display
-	public $displayColumnNames = array();	// column headings - display
-	public $downloadColumnNames = array();	// column headings - download
+	public $displayColumns = array();	// Column objects - display
 	public $downloadColumns = array();	// Column objects - download
 
 	public $whereConditions = array();	// always added to WHERE clause
@@ -552,15 +524,14 @@ class Query extends SimpleQuery {
 			// set column names 
 			foreach ($downloadColumns as $c) {
 				$this->downloadColumns[] = $this->D->T($table)->C($c);
-				$this->downloadColumnNames[] = $this->D->T($table)->C($c)->description;
 			}
 			foreach ($displayColumns as $c) {
 				if ( ($c == $this->D->T($table)->defName) && (!isset($this->nameColumn)) ) {
-					$this->nameColumn = count($this->displayColumnNames);
+					$this->nameColumn = count($this->displayColumns);
 				}
 				if ( ($table != $this->underlyingTable) || ($c != $this->D->T($table)->priKey) ) {	
 					// the PRIMARY KEY of the underlyingTable is not displayed
-					$this->displayColumnNames[] = $this->D->T($table)->C($c)->description;
+					$this->displayColumns[] = $this->D->T($table)->C($c);
 				}
 			}
 		}
@@ -595,8 +566,10 @@ class Query extends SimpleQuery {
 		// the basic query misses the WHERE and ORDER BY clauses, this will be done here
 		if ($fullResult) {
 			$query = $this->downloadQuery;
+			$columns = $this->downloadColumns;
 		} else {
 			$query = $this->sqlQuery;
+			$columns = $this->displayColumns;
 		}
 		$countQuery = $this->countQuery;
 
@@ -606,17 +579,14 @@ class Query extends SimpleQuery {
 		$likes = array();			// OR conditions (e.g. full text search)
 		$filters = $this->whereConditions;	// AND conditions (e.g. filters) 
 
-		$filterInfo = "";			// text info on filters applied
-
 		// here we build WHERE conditions - first with OR
 		// check for search word in relevant columns
 		if (isset($options['search']) && strlen($options['search']) > 0) {
-			$filterInfo .= " (matching '".$options['search']."')";
-			foreach ($this->downloadColumns as $c) {
+			foreach ($columns as $c) {
 				$likes[] = "( " . ( $c->foreign_key ? 
 						$c->T->tableName."_".$c->name.".".$this->D->T($c->foreign_table)->defName :
 						$c->T->tableName.".".$c->name ) .
-					" LIKE ".$this->D->dbh->quote("%".$options['search']."%")." )";
+					" LIKE ".$this->D->quote("%".$options['search']."%")." )";
 			}
 		}
 
@@ -625,15 +595,12 @@ class Query extends SimpleQuery {
 			$filters[] = "(  ".implode("\n          OR ",$likes)." )";
 		}
 
-		if (isset($options['filterColumn'])) {	// additional exact filter
-			$C = $this->D->T($options['filterTable'])->C($options['filterColumn']);
-			if (isset($C->foreign_key)) {
-				$filterInfo .= " (for ".$this->D->dbh->queryOne("SELECT ".$this->D->T($C->foreign_table)->defName." FROM ".
-				$C->foreign_table." WHERE ".$C->foreign_key. " = ".$this->D->dbh->quote($options['filterValue'])).")";
-			} else {
-				$filterInfo .= " (".$options['filterColumn']."=".$options['filterValue'].")";
+		if (isset($options['filter'])) {	// additional exact filter
+			foreach ($options['filter'] as $fexpr => $fvalue) {
+				list($ftable, $fcolumn) = explode(".", $fexpr);
+				$C = $this->D->T($ftable)->C($fcolumn);
+				$filters[] = "( " . $fexpr . ( $fvalue == "NULL" ? " IS NULL" : " = ".$this->D->quote($fvalue) )." )";
 			}
-			$filters[] = "( ".$options['filterTable'].".".$options['filterColumn']." = ".$this->D->dbh->quote($options['filterValue'])." )";
 		}
 
 		// now we add a WHERE condition if needed
@@ -659,12 +626,20 @@ class Query extends SimpleQuery {
 			$query .= "\n".$this->D->T($this->underlyingTable)->defOrder;
 		}
 
+		// create column info array
+		$columnInfo = array();
+		foreach($columns as $c) {
+			$columnInfo[] = array(
+				'description' => $c->description,
+				'filter' => $c->filter()
+				);
+		}
+
 		return(array(	'query' =>		$query,
 				'countQuery' =>		$countQuery,
 				'options' =>		$options,
 				'fullResult' =>		$fullResult,
-				'filterInfo' =>		$filterInfo,
-				'columnNames' =>	( $fullResult ? $this->downloadColumnNames : $this->displayColumnNames ) ));
+				'columns' =>		$columnInfo ));
 
 	} /* function prepareQuery() */
 

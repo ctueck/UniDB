@@ -1,4 +1,3 @@
-
 /*************************************************************************************************************/
 /***** Class: Table - one instance is created for every table, when page is loaded             ***************/
 /*****                (it persists throughout the session)                                     ***************/
@@ -17,6 +16,7 @@ function Table (UniDB_instance, tableName, parameters) {
 	this.hidden = parameters.hidden;
 	this.priKey = parameters.priKey;
 	this.searchable = parameters.searchable;
+	this.includeGlobalSearch = parameters.includeGlobalSearch,
 	this.underlyingTable = parameters.underlyingTable;
 	this.allowNew = parameters.allowNew;
 	this.allowEdit = parameters.allowEdit;
@@ -40,6 +40,13 @@ Table.prototype.reset = function () {
 	this.options = {};
 }
 
+/* navigate(): refresh URL hash with current options */
+Table.prototype.navigate = function () {
+	// use UniDB instance navigate function to change URL
+	this.D.navigate(this.section, this.tableName, this.options);
+	// this will trigger a new call to show()
+}
+
 /* show(): the main function of the class, list records  */
 Table.prototype.show = function () {
 	var T = this;	// safe in separate variable, since "this" points to sth else in callbacks
@@ -49,130 +56,176 @@ Table.prototype.show = function () {
 	// run query
 	T.D.cmd('GET', '/' + T.section + '/' + T.tableName, T.options, function (data) {
 		// empty the content area and table-specific toolbars
-		$("#content").text("");
-		$("#tableinfo").text("");
-		$("#navbar").text("");
-		$("#searchbar").text("");
+		var tContent	= $("#content").text("").removeClass("homepage");
+		var tInfo	= $("#table_info").text("");
+		var tButtons	= $("#table_buttons").text("");
+		var tNav	= $("#table_nav").text("");
+		var tSearch	= $("#table_search").text("");
 		// create navigation bar
 		$("<button/>", { html: "first record" } )
 			.button({ text: false, icons: { primary: "ui-icon-seek-start" }})
-			.click(function() { T.options.skip = 0; T.show(); })
-			.appendTo("#navbar");
+			.click(function() { T.options.skip = 0; T.navigate(); })
+			.appendTo(tNav);
 		$("<button/>", { html: "page up" } )
 			.button({ text: false, icons: { primary: "ui-icon-seek-prev" }})
-			.click(function() { T.options.skip = data.pageUp; T.show(); })
-			.appendTo("#navbar");
+			.click(function() { T.options.skip = data.pageUp; T.navigate(); })
+			.appendTo(tNav);
 		$("<button/>",{ id: "refresh_table",
 				html: data.firstRecord+"-"+data.lastRecord+" of "+data.totalRecords+" records" } )
 			.button()
 			.click(function() { T.show(); })	// basically this just reloads the table
-			.appendTo("#navbar");
+			.appendTo(tNav);
 		$("<button/>", { html: "page down" } )
 			.button({ text: false, icons: { primary: "ui-icon-seek-next" }})
-			.click(function() { T.options.skip = data.pageDown; T.show(); })
-			.appendTo("#navbar");
+			.click(function() { T.options.skip = data.pageDown; T.navigate(); })
+			.appendTo(tNav);
 		$("<button/>", { html: "last page" } )
 			.button({ text: false, icons: { primary: "ui-icon-seek-end" }})
-			.click(function() { T.options.skip = data.lastPage; T.show(); })
-			.appendTo("#navbar");
-		$("#navbar").buttonset();
+			.click(function() { T.options.skip = data.lastPage; T.navigate(); })
+			.appendTo(tNav);
+		tNav.buttonset();
 		// text search
 		if (T.searchable) {
 			$("<input/>", { id: "search_term", type: "text", placeholder: "Search table ...", value: T.options.search })
 				.prop("size","25")
-				.appendTo("#searchbar")
+				.appendTo(tSearch)
 				.wrap($("<form/>", { name: "search_form", id: "search_form" }));
 			$("#search_form").submit(function () {
 				T.options.skip = 0;
 				T.options.search = $("#search_term").val();
-				T.show();
+				T.navigate();
 				return(false);
 			});
 		}
 		// download (CSV) button
 		$("<button/>", { html: "Download" } )
 			.button({ icons: { primary: "ui-icon-arrowthickstop-1-s" }})
-			.click(function() { T.download(); })
-			.appendTo("#searchbar");
+			.click( { T: T }, T.download)
+			.appendTo(tButtons);
 		// new record button (unless for VIEW's)
 		if (T.allowNew) {
-			$("<button/>", { html: "New" } )
+			$("<button/>", { text: "New" } )
 				//.data( { "table": (data.underlyingTable ? data.underlyingTable : table ), "options": options } )
 				.button({ icons: { primary: "ui-icon-document" }})
 				.click( function() {
 					new Record( (T.underlyingTable ? T.D.T(T.underlyingTable) : T ), undefined,
 						function(newRecord) {
-							if (T.options.filterColumn) {
-								newRecord.Fields[T.options.filterColumn].oldValue = T.options.filterValue;
+							if (T.options.filter) {
+								for (var key in T.options.filter) {
+									var tableColumn = key.split(".");
+									newRecord.Fields[tableColumn[1]].oldValue = T.options.filter[key];
+								}
 							}
 							new Dialog(T.D.dialogWindow, newRecord);
 						});
 				})
-				.appendTo("#searchbar");
+				.appendTo(tButtons);
 		}
 		// table info
 		if (T.userQuery) {
-			$("<a/>", { href: "#", html: "Edit",  "class": "foreign-table-button" } )
-				.button({ text: false, icons: { primary: "ui-icon-pencil" }})
+			$("<button/>", { text: "Edit query" } )
+				.button({ icons: { primary: "ui-icon-pencil" }})
 				.click(function() { T.modify(); })
-				.appendTo("#tableinfo");
+				.appendTo(tButtons);
 		}
 		// show table/query name
-		$("<span/>", { html: T.D.stripText(T.description, true, data.filterInfo) })
-			.appendTo("#tableinfo");
+		$("<span/>", { html: T.D.stripText(T.description, true) })
+			.appendTo(tInfo);
 		// now make an actual table
-		$("<table/>", { id: "content_table" })
-			.appendTo("#content");
-		$("<tr/>", { id: "column_names" })
-			.wrap("<thead/>")
-			.appendTo("#content_table");
+		var table = $("<table/>", { id: "content_table" });
+		var tableHead = $("<thead/>");
+		var tableBody = $("<tbody/>");
+		var columnNames = $("<tr/>", { id: "column_names" });
+		var filters = $("<tr/>", { id: "filters" });
 		for (var i=0; i < data.columns.length; i++) {
-			$("<th/>", {	"class": ( (T.options.order == data.columns[i].name)
-						|| (T.options.order == data.columns[i].name + " DESC") ? "column-sorted" : undefined ),
 			// first header spans two columns: action buttons and first data column
-					colspan: ( (i == 0) ? 2 : 1 ) })
-				.append( $("<button/>", { href: "#", html: data.columns[i].description, "class": "sort-button" } )
-					.button({ icons: { secondary: ( T.options.order == data.columns[i].name ?
+			var header = $("<th/>");
+			var header2 = $("<th/>");
+			// button
+			$("<button/>", { href: "#", html: data.columns[i].description, "class": "sort-button" } )
+				.addClass( (T.options.order == data.columns[i].name)
+					|| (T.options.order == data.columns[i].name + " DESC") ? "column-sorted" : undefined )
+				.button({ icons: { secondary: ( T.options.order == data.columns[i].name ?
 					"ui-icon-triangle-1-n" : ( T.options.order == data.columns[i].name + " DESC" ?
-					"ui-icon-triangle-1-s" : "ui-icon-triangle-2-n-s" ) ) }}) )
+					"ui-icon-triangle-1-s" : "ui-icon-triangle-2-n-s" ) ) }})
 				.click( {	T:	T,
 						column:	data.columns[i].name,
 						desc:	( T.options.order == data.columns[i].name ? 1 : 0 ) } ,
 					T.sortFunction )
-				.appendTo("#column_names");
+				.appendTo(header);
+			// filter drop down
+			if (data.columns[i].filter) {
+				var filterOuter = $("<div/>", { "class": "filter-outer" } );
+				$("<span/>", { "class": "filter-button" })
+					.on("click", { T: T, column: data.columns[i].filter.column }, T.unfilterFunction)
+					.appendTo(filterOuter);
+				var filter = $("<select/>", { "class": "filter-select" });
+				$("<option/>", { value: undefined, text: '[all]' }).appendTo(filter);
+				for (var o=0; o < data.columns[i].filter.choices.length; o++) {
+					var option = $("<option/>", { value:	data.columns[i].filter.choices[o][0] === null ? 'NULL' : data.columns[i].filter.choices[o][0],
+							 text:	T.D.stripText(data.columns[i].filter.choices[o][1], false),
+							 title:	data.columns[i].filter.choices[o][1]
+					});
+					if (T.options.filter
+						&& T.options.filter[data.columns[i].filter.column] !== undefined
+						&& ( T.options.filter[data.columns[i].filter.column]
+						     == data.columns[i].filter.choices[o][0]
+						     || ( T.options.filter[data.columns[i].filter.column] == 'NULL'
+						          && data.columns[i].filter.choices[o][0] === null)
+						) ) {
+						option.prop("selected","selected");
+						filter.addClass("filter-active");
+						filterOuter.find(".filter-button").addClass("filter-active");
+					}
+					option.appendTo(filter);
+				}
+				filter.on("change", { T: T, column: data.columns[i].filter.column }, T.filterFunction);
+				filter.appendTo(filterOuter);
+				filterOuter.appendTo(header2);
+			}
+			header.appendTo(columnNames);
+			header2.appendTo(filters);
 		}
+		columnNames.appendTo(tableHead);
+		filters.appendTo(tableHead);
+		tableHead.appendTo(table);
 		for (var i=0; i < data.keys.length; i++) {
 			var thisKey = data.keys[i];
 			var row = $("<tr/>", { id: "data_"+thisKey });
 			row.click(T.rowClickFunction);
-			var actButtons = $("<td/>").addClass("edit-delete-buttons");
-			$("<button/>", { html: (T.allowEdit ? "Edit" : "View") } )
-				.button({	text:	false,
-						icons:	{ primary: (T.allowEdit ? "ui-icon-pencil" : "ui-icon-search") }})
-				.click(	{ 	T:	(T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
-						value:	thisKey } , T.editFunction )
-				.appendTo(actButtons);
-			$("<button/>", { html: "Fill template" } )
-				.button({	text:	false,
-						icons:	{ primary: "ui-icon-copy" }})
-				.click(	{ 	T:	(T.underlyingTable ? T.D.T(T.underlyingTable) : T ) ,
-						value:	thisKey } , T.downloadOneFunction )
-				.appendTo(actButtons);
-			if (T.allowDelete) {
-				$("<button/>", { html: "Delete" } )
-					.button({ text: false, icons: { primary: "ui-icon-trash" }})
-					.click( {	T:	(T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
-							value:	thisKey,
-							name:	data.data[i][data.nameColumn] } , T.deleteFunction )
-					.appendTo(actButtons);
-			}
-			actButtons.buttonset();
-			actButtons.appendTo(row);
 			for (j=0; j < data.data[i].length; j++) {
-				$("<td/>", { html: T.D.stripText(data.data[i][j], true) }).appendTo(row);
+				var cell = $("<td/>", { html: T.D.stripText(data.data[i][j], true) });
+				if (j == 0) { // first cell
+					cell.addClass("edit-delete-buttons");
+					var actButtons = $("<div/>");
+					$("<button/>", { html: (T.allowEdit ? "Edit" : "View") } )
+						.button({	text:	false,
+								icons:	{ primary: (T.allowEdit ? "ui-icon-pencil" : "ui-icon-search") }})
+						.click(	{ 	T:	(T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
+								value:	thisKey } , T.editFunction )
+						.appendTo(actButtons);
+					$("<button/>", { html: "Fill template" } )
+						.button({	text:	false,
+								icons:	{ primary: "ui-icon-copy" }})
+						.click(	{ 	T:	(T.underlyingTable ? T.D.T(T.underlyingTable) : T ) ,
+								value:	thisKey } , T.downloadOneFunction )
+						.appendTo(actButtons);
+					if (T.allowDelete) {
+						$("<button/>", { html: "Delete" } )
+							.button({ text: false, icons: { primary: "ui-icon-trash" }})
+							.click( {	T:	(T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
+									value:	thisKey,
+									name:	data.data[i][data.nameColumn] } , T.deleteFunction )
+							.appendTo(actButtons);
+					}
+					actButtons.buttonset().prependTo(cell);
+				}
+				cell.appendTo(row);
 			}
-			row.appendTo("#content_table");
+			row.appendTo(tableBody);
 		}
+		tableBody.appendTo(table);
+		table.appendTo("#content");
 	}); // D.cmd
 }
 
@@ -261,10 +314,12 @@ Table.prototype.modify = function () {
 }
 
 /* download(): download current list as CSV file (called by download button click) */
-Table.prototype.download = function () {
+Table.prototype.download = function (evnt) {
 	// we extend an empty object, in order not to modify the existing options, and the skip value is removed
 	// (= download is always complete)
-	this.D.cmd('GET', '/' + this.section + '/' + this.tableName, $.extend({ "download": true }, this.options),
+	var T = evnt.data.T;
+
+	T.D.cmd('GET', '/' + T.section + '/' + T.tableName, $.extend({ "download": true }, T.options),
 		function (data) {
 			var CSV = new Blob([ data ], { type: MIME_CSV } );
 			var url = URL.createObjectURL(CSV);
@@ -289,7 +344,40 @@ Table.prototype.sortFunction = function (evnt) {
 	var T = ( evnt.data.T ? evnt.data.T : this );
 	T.options.order = ( evnt.data.desc ? evnt.data.column + " DESC" : evnt.data.column );
 	T.skip = 0;
-	T.show();
+	T.navigate();
+}
+
+/* filterFunction(): filter by selection */
+Table.prototype.filterFunction = function (evnt) {
+	var T = ( evnt.data.T ? evnt.data.T : this );
+	if (typeof T.options.filter == "undefined") {
+		T.options.filter = {};
+	}
+	if (evnt.target.value == "[all]") {
+		delete T.options.filter[evnt.data.column];
+		$(evnt.target).removeClass("filter-active");
+		$(evnt.target).parent().find(".filter-button").removeClass("filter-active");
+	} else {
+		T.options.filter[evnt.data.column] = evnt.target.value;
+		$(evnt.target).addClass("filter-active");
+		$(evnt.target).parent().find(".filter-button").addClass("filter-active");
+	}
+	T.skip = 0;
+	T.navigate();
+}
+
+/* unfilterFunction(): reset filter for column */
+Table.prototype.unfilterFunction = function (evnt) {
+	var T = evnt.data.T;
+	$(evnt.target).removeClass("filter-active")
+		.parent().find(".filter-select")
+		.val("[all]")
+		.removeClass("filter-active");
+	if (typeof T.options.filter != "undefined") {
+		delete T.options.filter[evnt.data.column];
+		T.skip = 0;
+		T.navigate();
+	}
 }
 
 /* deleteFunction(): delete one record after confirmation (called by delete button click) */
@@ -393,11 +481,10 @@ Table.prototype.downloadOneFunction = function(evnt) {
 Table.prototype.relatedFunction = function(evnt) {
 	var T = ( evnt.data.T ? evnt.data.T : this );
 	T.reset();
-	T.options.filterTable = T.tableName;
-	T.options.filterColumn = evnt.data.relatedColumn;
-	T.options.filterValue = evnt.data.value;
-	T.show();
+	T.options.filter = { };
+	T.options.filter[T.tableName + '.' + evnt.data.relatedColumn] = evnt.data.value;
 	T.D.dialogWindow.dialog("close");
+	T.navigate();
 	if (evnt.data.count == 0) {	// we immediately create a new record
 		new Record(T, undefined,
 			function(newRecord) {
