@@ -91,10 +91,12 @@ class Table {
 		}
 
 		foreach ($r as $row) {
-			// create new Column object for each
-			$this->Columns[$row['column_name']] = new Column($this, $row);
-			// add to columns to be shown in lists by default
-			$this->defSelect[] = $row['column_name'];
+            if ($this->conf('type', $row['column_name']) != 'hidden') {
+                // create new Column object for each non-hidden column
+                $this->Columns[$row['column_name']] = new Column($this, $row);
+                // add to columns to be shown in lists by default
+                $this->defSelect[] = $row['column_name'];
+            }
 		}
 
 		// if a default array of SELECT columns is configured, we overwrite the auto-guessed one:
@@ -386,7 +388,7 @@ class Table {
 		$this->D->log("Loading record ".$this->tableName."(".$where.")");
 
 		// basic query
-		$query = "SELECT ".$this->tableName.".* FROM ".$this->tableName." WHERE ".$where." LIMIT 1";
+		$query = "SELECT ".implode(",",array_keys($this->Columns)).".* FROM ".$this->tableName." WHERE ".$where." LIMIT 1";
 
 		$r = $this->D->query($query)->fetch();
 
@@ -495,9 +497,6 @@ class Table {
 
 		$r = $this->D->query($query)->rowCount();
 
-		// log query
-		$this->D->log("$query // $r row(s) affected");
-
 		/* you'd expect 'if ($r == 0) { error... }' here, but the problem is that 0 rows affected could mean 2 things:
 		    a. record does not exist
 		    b. clicked apply/ok without any changes
@@ -526,9 +525,6 @@ class Table {
 		$query = "DELETE FROM $this->tableName WHERE $this->priKey = ".$this->D->quote($Id)." LIMIT 1";
 
 		$r = $this->D->query($query)->rowCount();
-
-		// log query
-		$this->D->log($this->D->dbh->last_query.' // '.$r.' row(s) affected');
 
 		if ($r == 0) {
 			$this->D->error("It appears nothing could be deleted - maybe someone else did?", 404);

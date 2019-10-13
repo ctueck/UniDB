@@ -42,8 +42,8 @@ Field.prototype.value = function() {
 	if (this.type == "checkbox") {
 		// for a checkbox, we cannot access the value directly, but have to look at the checked property
 		return(this.input.prop("checked") ? 1 : 0);
-	} else if (this.type == "raw") {
-		// raw elements have no value
+	} else if ( (this.type == "raw") || (this.type == "hidden") ) {
+		// raw and hidden elements have no value
 		return(null);
 	} else {
 		// other inputs are trivial (but we return null instead of an empty string
@@ -64,6 +64,11 @@ Field.prototype.showLabel = function(target) {
 // show() : display a neat block including <label> and/or <input> (return as jQuery object)
 Field.prototype.showField = function(target) {
 	var realThis = this;			// used in anonymous function
+
+    // if type is hidden: just return
+    if (this.type == 'hidden') {
+        return(true);
+    }
 
 	// if type is raw: just return
 	if (this.type == 'raw') {

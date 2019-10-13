@@ -2,6 +2,10 @@
 
 /* constants for UniDB */
 
+define("CONFIG_FILE",   "config/config.ini");   // name of config.ini file
+define("QUERY_DIR",     "config/queries/");     // directory to save user queries
+define("QUERY_DIRMODE", 02770);                 // create mode for query directories
+
 // Table editing permissions
 define("P_READONLY",	0);	// readonly = no edit permissions
 define("P_NEW",		1);	// create records
