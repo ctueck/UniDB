@@ -13,25 +13,31 @@ ini_set("session.use_trans_sid",false);
 date_default_timezone_set('GMT');
 setlocale(LC_TIME, 'C');
 
-/* load config */
-require 'config/config.inc.php';
-
-/* main UniDB class */
-require 'include/UniDB.php';
-
 /* function to handle exceptions not caught otherwise */
-function UniDB_exception_handler($ex) {
+function UniDB_exception_handler($ex, $error_string = "", $error_file = "", $error_line = "") {
+    if ($ex instanceof Throwable) {
+        $log = $ex->__toString();
+    } else {
+        $log = "Error $ex: $error_string (at $error_file #$error_line)";
+    }
 	// if a UniDB instance exists, add error to log
 	if (isset($_SESSION['UniDB']) && $_SESSION['UniDB'] instanceof UniDB) { // existing session
-		$_SESSION['UniDB']->log($ex, true);
+		$_SESSION['UniDB']->log($log, true);
 	}
 	// set HTTP code to internal server error
 	http_response_code(500);
 	// return the error message as JSON object
 	header("Content-type: application/json");
-	die(json_encode(array(	"UniDB_fatalError" =>	$ex->getMessage())));
+	die(json_encode(array(	"UniDB_fatalError" =>	$log)));
 }
 set_exception_handler("UniDB_exception_handler");
+set_error_handler("UniDB_exception_handler");
+
+/* load config */
+require 'config/config.inc.php';
+
+/* main UniDB class */
+require 'include/UniDB.php';
 
 /*** parse headers and API path ***/
 $request_path = isset($_SERVER['PATH_INFO']) ? $_SERVER['PATH_INFO'] : null;

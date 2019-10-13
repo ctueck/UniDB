@@ -79,25 +79,7 @@ function UniDB(dbiUrl) {
 
 	// prepare the general dialog window
 	D.dialogWindow = $("#dialog_window").dialog({ autoOpen: false });
-	/*.dialog({
-		autoOpen: false,
-		maxHeight: $("body").height(),
-		width: $("body").width() * 0.8,
-		resizable: false,
-		modal: true
-	});*/
-	// prepare the query editor window
-	/*D.queryWindow = $("#query_window").dialog({
-		autoOpen: false,
-		width: "80%",
-		modal: true
-	});
-	// prepare the debug window
-	D.debugWindow = $("#debug_window").dialog({
-		autoOpen: false,
-		width: "100%",
-		modal: true
-	});*/
+
 	// prepare the overlay div element
 	D.overlay = $("#content_overlay");
 
@@ -110,15 +92,19 @@ function UniDB(dbiUrl) {
 		for (var tableName in data.tables) {
 			D.Tables[tableName] = new Table(D, tableName, data.tables[tableName]);
 		}
-		D.initQueries(data.queries);
+        D.cmd('GET', '/system/queries', undefined, function (data, jqxhr) {
+            D.mtime = jqxhr.getResponseHeader("Last-Modified");
+            D.initQueries(data.queries);
 
-		// check if we are logged in: will be done implicitly by menu function
-		D.menu();
+            // construct menu
+		    D.menu();
+            D.queriesMenu();
 
-		// set up navigation
-		D.path = new Object;
-		$(window).on("hashchange", D, D.doAction);
-		D.doAction();
+            // set up navigation
+            D.path = new Object;
+            $(window).on("hashchange", D, D.doAction);
+            D.doAction();
+        });
 	});
 
 }
@@ -234,14 +220,16 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 		requestHeaders = { };
 	}
 
-	if ( (! D.sessionId) && (path != "/login") && (path != "/login/") ) {
-		// we don't have a session token, and neither is the present call to the login
-		// endpoint -> user has to log in first ; loginForm() will run the command afterwards
-		// (unless we are actually calling a login)
-		D.loginForm(method, path, parameters, callback, failCallback);
-	} else {
-		// we have a sessionID, or we're logging in - let's go
+    if ([ 'GET', 'PUT', 'POST', 'DELETE' ].includes(method) && path) {
+
 		requestHeaders["Accept"] = returnType;
+
+		// check if we have a sessionID
+		// If we don't have a session token and the present call is not to the login
+		// endpoint, the command will inevitably fail with an unauthorized response.
+        // While we could call loginForm() even before attempting to execute the command,
+        // the bound-to-fail call will ensure that lower level errors (e.g. config file
+        // missing) will be reported instead of showing a login prompt.
 		if (D.sessionId) {
 			// pass our session token in Auth header
 			requestHeaders["Authorization"] = "Bearer " + D.sessionId;
@@ -308,7 +296,13 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 				return(true);
 			}
 		}));
-	}
+    } else {
+        if (path) {
+            console.log("Method [" + method + "] is invalid.");
+        } else {
+            console.log("No path given for API call.");
+        }
+    }
 }
 
 /* loginForm(): show login window, called by cmd() if login is needed */
@@ -433,6 +427,56 @@ UniDB.prototype.initQueries = function(queries) {
 		});
 }
 
+/* build query menu */
+UniDB.prototype.queriesMenu = function() {
+	var D = this;	// safe in separate variable, since "this" points to sth else in callbacks
+
+    // empty menu
+    $("#menuQueries").text("");
+    var subMenus = { };
+
+    // generate new entry for each query
+    $.each(D.QueriesAlpha, function (queryName, tableObject) { //for (var table in D.Tables) {
+        var entry = $("<li/>");
+        var category = null;
+        var description = tableObject.description;
+        if (description.indexOf(":") > -1) {
+            category = description.substr(0, description.indexOf(":")).trimRight();
+            description = description.substr(description.indexOf(":")+1).trimLeft();
+        }
+        $( "<a/>", {    html: D.stripText(description),
+                href: "#/query/" + tableObject.tableName,
+                title: description })
+            .appendTo(entry);
+        // edit submenu
+        if (tableObject.userQuery) {
+        $("<a/>", { html: "Edit", "class": "ui-icon-pencil" } )
+            .appendTo(entry)
+            .on("click",function() {
+                tableObject.modify();
+            })
+            .wrap($("<ul/>", { "class": "small" }))
+            .wrap($("<li/>"));
+        }
+        if (category != null) {
+            if (subMenus[category] == undefined) {
+                subMenus[category] = $("<ul/>");
+            }
+            entry.appendTo(subMenus[category]);
+        } else {
+            entry.appendTo($("#menuQueries"));
+        }
+    });
+    for (var category in subMenus) {
+        var entry = $("<li/>");
+        $("<a/>", { html: category })
+            .appendTo(entry);
+        subMenus[category].appendTo(entry);
+        entry.prependTo($("#menuQueries"));
+    }
+
+}
+
 /*****
  ***** actions: these are the actual functions offered by the UniDB class
  *****/
@@ -471,52 +515,7 @@ UniDB.prototype.menu = function () {
 					if (jqxhr.status != "304" && data.queries) {
 						D.mtime = jqxhr.getResponseHeader("Last-Modified");
 						D.initQueries(data.queries);
-						// empty menu
-						$("#menuQueries").text("");
-						var subMenus = { };
-						// generate new entry for each query
-						$.each(D.QueriesAlpha, function (queryName, tableObject) { //for (var table in D.Tables) {
-							var entry = $("<li/>");
-							var category = null;
-							var description = tableObject.description;
-							if (description.indexOf(":") > -1) {
-								category = description.substr(0, description.indexOf(":")).trimRight();
-								description = description.substr(description.indexOf(":")+1).trimLeft();
-							}
-							$( "<a/>", {	html: D.stripText(description),
-									href: "#/query/" + tableObject.tableName,
-									title: description })
-								.appendTo(entry);
-								/*.on("click",function() {
-								tableObject.reset();
-								tableObject.show();
-								})*/
-							// edit submenu
-							if (tableObject.userQuery) {
-							$("<a/>", { html: "Edit", "class": "ui-icon-pencil" } )
-								.appendTo(entry)
-								.on("click",function() {
-									tableObject.modify();
-								})
-								.wrap($("<ul/>", { "class": "small" }))
-								.wrap($("<li/>"));
-							}
-							if (category != null) {
-								if (subMenus[category] == undefined) {
-									subMenus[category] = $("<ul/>");
-								}
-								entry.appendTo(subMenus[category]);
-							} else {
-								entry.appendTo($("#menuQueries"));
-							}
-						});
-						for (var category in subMenus) {
-							var entry = $("<li/>");
-							$("<a/>", { html: category })
-								.appendTo(entry);
-							subMenus[category].appendTo(entry);
-							entry.prependTo($("#menuQueries"));
-						}
+                        D.queriesMenu();
 					}
 					$("#menuTables").hide();
 					$("#menuQueries").menu("refresh")

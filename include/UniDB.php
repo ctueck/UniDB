@@ -108,17 +108,17 @@ class UniDB {
 	}
 
 	public function userQueryDir() {
-		$userQueryDir = ( $this->conf('userquerydir') ?: 'config/queries' ) . '/' . $this->pdo['username'] . '.d';
+		$userQueryDir = ( $this->conf('userquerydir') ?: QUERY_DIR ) . DIRECTORY_SEPARATOR . $this->pdo['username'] . '.d';
 		if (!is_dir($userQueryDir)) {
-			mkdir($userQueryDir);
+            mkdir($userQueryDir, QUERY_DIRMODE, true);
 		}
 		return( $userQueryDir );
 	}
 
 	public function publicQueryDir() {
-		$publicQueryDir = ( $this->conf('userquerydir') ?: 'config/queries' ) . '/_public_';
+		$publicQueryDir = ( $this->conf('userquerydir') ?: QUERY_DIR ) . DIRECTORY_SEPARATOR . '_public_';
 		if (!is_dir($publicQueryDir)) {
-			mkdir($publicQueryDir);
+            mkdir($publicQueryDir, QUERY_DIRMODE, true);
 		}
 		return( $publicQueryDir );
 	}
@@ -140,7 +140,7 @@ class UniDB {
 				if (max($queryObject->mtime, $filetime) > $mtime) {
 					$this->log("CHANGE $queryName file=".$filetime." session=".$queryObject->mtime." (".$queryObject->description.")");
 					if ($filetime > $queryObject->mtime) {
-						$this->log("       (file is newer => reload)");
+						$this->log("       (file mtime=$filetime is newer => reload)");
 						$newQuery = new SimpleQuery($this, unserialize(file_get_contents($filename)), $filetime);
 						$this->Queries[$newQuery->name] = $newQuery;
 					}
@@ -310,6 +310,8 @@ class UniDB {
 
 	public function query($query, $dieOnError = true) {
 	/* query the database, handle errors and return PDOStatement object */
+        $this->log($query);
+
 		$result = $this->dbh->query($query);
 
 		if ($result == false) {

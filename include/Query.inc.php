@@ -161,7 +161,7 @@ class SimpleQuery {
 		// now, run the main query
 		$r = $this->D->query($query);
 		
-		$this->D->log("\n$query // returned ".$r->rowCount()." rows");
+		$this->D->log("-- returned ".$r->rowCount()." rows");
 
 		// now the real result - first metadata and navigation
 		if (! $fullResult) {
@@ -432,8 +432,6 @@ class SimpleQuery {
 		if ($r == false) {		// record not found
 			$this->D->error("record not found", 404);
 		}
-
-		$this->D->log("\n".$realQuery['query']." // returned 1 row");
 
 		/* now we build a fieldset as required by the UI */
 

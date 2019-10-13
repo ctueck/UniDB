@@ -166,10 +166,11 @@ class Column {
 				$this->fe_type = "readonly";
 				$this->fe_size = 20;
 				break;
-			/*case '':	
-				break;*/
+            case 'hidden':
+                $this->fe_type = "hidden";
+                break;
 			default:
-				$this->D->log("Warning: data type ".$row['data_type']." is unsupported.");
+				$this->D->log("Warning: data type ".$this->data_type." is unsupported.");
 				break;
 		}
 
@@ -239,6 +240,9 @@ class Column {
 
 		if (isset($this->foreign_key)) {
 			// in SELECT expr, fetch defName column from referenced table (not the column itself)
+            if (! $this->D->T($this->foreign_table)->C($this->D->T($this->foreign_table)->defName)) {
+                $this->D->error("Name column of [".$this->foreign_table."] set to [".$this->D->T($this->foreign_table)->defName."], but does not exist.");
+            }
 			return( array(	'expr' => $this->D->T($this->foreign_table)
 							->C($this->D->T($this->foreign_table)->defName)
 							->select($prefix.'_'.$this->name)['expr'] ,
