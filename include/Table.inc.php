@@ -388,7 +388,7 @@ class Table {
 		$this->D->log("Loading record ".$this->tableName."(".$where.")");
 
 		// basic query
-		$query = "SELECT ".implode(",",array_keys($this->Columns)).".* FROM ".$this->tableName." WHERE ".$where." LIMIT 1";
+		$query = "SELECT ".implode(",",array_keys($this->Columns))." FROM ".$this->tableName." WHERE ".$where." LIMIT 1";
 
 		$r = $this->D->query($query)->fetch();
 
