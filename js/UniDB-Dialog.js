@@ -74,8 +74,8 @@ Dialog.prototype.showRelated = function() {
 	// show buttons for non-UNIQUE relations
 	$.each(allRelated, function(j, relation) {
 		relation.T = realThis.D.T(relation.relatedTable);
-		if ( ( (relation.count > 0) && (relation.mode & R_EXIST) && ( ( ! relation.unique ) || ( ! (relation.mode & R_AUTOLOAD) ) ) )
-		  || ( (relation.count == 0) && (relation.mode & R_NEW) && relation.T.allowNew) ) {
+	//	if ( ( (relation.count > 0) && (relation.mode & R_EXIST) && ( ( ! relation.unique ) || ( ! (relation.mode & R_AUTOLOAD) ) ) )
+	//	  || ( (relation.count == 0) && (relation.mode & R_NEW) && relation.T.allowNew) ) {
 			// we only show a related button if there are records or allowNew is true
 			hasRelatedTables = 1;		// set the flag to show related line
 			// if count is 0, the button will directly open a new record window
@@ -86,7 +86,7 @@ Dialog.prototype.showRelated = function() {
 					(relation.count > 0 ? "ui-icon-folder-open" : "ui-icon-document") } })
 				.click(relation, relation.T.relatedFunction)
 				.appendTo(relatedTables);
-		}
+	//	}
 	}); // $.each ... related
 	if (hasRelatedTables) {
 		relatedTables.appendTo(this.jqDialog);

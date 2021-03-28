@@ -2,7 +2,7 @@
 /***** Class: Field - a form field, used by Record                                             ***************/
 /*************************************************************************************************************/
 
-function Field (DR, name, definition) {
+function Field (DR, name, definition, value) {
 	// first parameter can be parent Record or UniDB instance
 	// this.R will be the parent Record (or null if none)
 	// this.D will be the UniDB instance
@@ -14,18 +14,22 @@ function Field (DR, name, definition) {
 		this.D = this.R.T.D;
 	}
 	this.name = name;			// MySQL name
+    this.isPriKey = this.R && (this.name == this.R.T.priKey)
 	// set objects's properties:
-	this.label = definition.label;		// lable/description
-	this.type = definition.type;		// type
-	this.size = definition.size;		// length (size of input field)
-	this.placeholder = definition.placeholder;
-	this.options = definition.options;
-	this.foreign_table = definition.foreign_table;
+	this.label = definition.label;	                                                    	// label/description
+	this.type = ( definition.read_only || this.isPriKey ? 'readonly' : definition.type );	// type
+	this.size = ( definition.max_length < 70 ? definition.max_length : 70 );	        	// length (size of input field)
+    this.max_length = definition.max_length                                                 // max content length
+    this.required = definition.required;                                                    // required field?
+	this.placeholder = definition.help_text || '';                                          // help text if available
+	this.options = definition.choices || [];
+	/*
+    this.foreign_table = definition.foreign_table;
 	this.foreign_key = definition.foreign_key;
 	this.foreign_value = definition.foreign_value;
 	this.isRecordName = definition.isName;
-
-	this.set(definition.value);
+    */
+	this.set(value);
 }
 
 /* set() : set value */
@@ -39,7 +43,7 @@ Field.prototype.set = function(value) {
 
 /* value() : return current value of the field */
 Field.prototype.value = function() {
-	if (this.type == "checkbox") {
+	if (this.type == "boolean") {
 		// for a checkbox, we cannot access the value directly, but have to look at the checked property
 		return(this.input.prop("checked") ? 1 : 0);
 	} else if ( (this.type == "raw") || (this.type == "hidden") ) {
@@ -96,7 +100,7 @@ Field.prototype.showField = function(target) {
 								text:		( this.foreign_value ? this.foreign_value : this.oldValue ) });
 			}
 			break;
-		case 'checkbox':
+		case 'boolean':
 			this.input = $("<input>", {	type:		"checkbox",
 							name:		this.name,
 							id:		( this.R ? this.R.T.tableName : "" )+"-"+this.name,
@@ -105,8 +109,17 @@ Field.prototype.showField = function(target) {
 				this.input.prop("checked","checked");
 			}
 			break;
-		case 'char':
+		case 'string':
+		case 'integer':
 			this.input = $("<input>", {	type:		"text",
+							name:		this.name, 
+							id:		( this.R ? this.R.T.tableName : "" )+"-"+this.name,
+							value:		this.oldValue,
+							placeholder:	this.placeholder })
+				.prop("size", this.size);
+			break;
+		case 'email':
+			this.input = $("<input>", {	type:		"email",
 							name:		this.name, 
 							id:		( this.R ? this.R.T.tableName : "" )+"-"+this.name,
 							value:		this.oldValue,
@@ -131,16 +144,27 @@ Field.prototype.showField = function(target) {
 				this.input.text(this.oldValue);
 			}
 			break;
-		case 'select':
+		case 'field':
+		case 'choice':
 			this.input = $("<select/>", {	name:		this.name,
 							id:		( this.R ? this.R.T.tableName : "" )+"-"+this.name });
+            if (!this.required) {
+				var empty = $("<option/>", {
+					value:	"",
+					text:	"[not asisgned]"
+				});
+				if (this.oldValue == null) {
+					empty.prop("selected","selected");
+				}
+				empty.appendTo(this.input);
+            }
 			for (var i = 0; i < this.options.length; i++) {
 				var option = $("<option/>", {
-					value:	( this.options[i][0] ? this.options[i][0] : "NULL" ),
-					text:	this.D.stripText(this.options[i][1], false),
-					title:	this.options[i][1]
+					value:	( this.options[i]['value'] ? this.options[i]['value'] : "NULL" ),
+					text:	this.D.stripText(this.options[i]['display_name'], false),
+					title:	this.options[i]['display_name']
 				});
-				if (this.oldValue == this.options[i][0]) {
+				if (this.oldValue == this.options[i]['value']) {
 					option.prop("selected","selected");
 				}
 				option.appendTo(this.input);
@@ -185,7 +209,7 @@ Field.prototype.showField = function(target) {
 	this.input.appendTo(outerDiv);
 	
 	// create a download button if this is the PRIMARY KEY
-	if (this.R && this.name == this.R.T.priKey) {
+	if (this.isPriKey) {
 		$("<a/>", { text: "Fill template", "class": "foreign-table-button" })
 			.button({ text: false, icons: { primary: "ui-icon-copy" }})
 			.click(	{ T: this.R.T, value: this.oldValue }, this.R.T.downloadOneFunction )

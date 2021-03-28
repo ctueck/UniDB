@@ -74,9 +74,6 @@ function UniDB(dbiUrl) {
 	// argument: URL of the dbi.php file
 	D.dbiUrl = dbiUrl;
 
-	// this will be the ID of our session on the server - it will be set on successful login
-	D.sessionId = D.cookies.hasItem("UniDB-session") ? D.cookies.getItem("UniDB-session") : null;
-
 	// prepare the general dialog window
 	D.dialogWindow = $("#dialog_window").dialog({ autoOpen: false });
 
@@ -85,14 +82,14 @@ function UniDB(dbiUrl) {
 
 	// fetch the list of tables (this will also trigger a login, load configuration, etc.)
 	D.Tables = {};
-	D.cmd('GET', "/system/tables", undefined, function (data) {
+	D.cmd('GET', "/system/tables/", undefined, function (data) {
 		D.Config = data.uiconfig;	// configuration passed from PHP
 		D.motd = data.UniDB_motd
 		// data.tables is an Object, with the SQL name as key and the description as value
 		for (var tableName in data.tables) {
 			D.Tables[tableName] = new Table(D, tableName, data.tables[tableName]);
 		}
-        D.cmd('GET', '/system/queries', undefined, function (data, jqxhr) {
+        D.cmd('GET', '/system/queries/', undefined, function (data, jqxhr) {
             D.mtime = jqxhr.getResponseHeader("Last-Modified");
             D.initQueries(data.queries);
 
@@ -148,6 +145,20 @@ UniDB.prototype.doAction = function(evnt) {
 		D.path = {	"section"	: decodeURIComponent(components[0]),
 				"object"	: decodeURIComponent(components[1]),
 				"options"	: new Object };
+
+        function sanitizeValue (input) {
+            if (input.length == 0) {
+                return(null);
+            } else {
+                var n = Number(input)
+                if (isNaN(n)) {
+                    return(input);
+                } else {
+                    return(n);
+                }
+            }
+        }
+
 		var options = components.slice(2);
 		for(var i in options) {
 			if (options[i].length > 0) {
@@ -156,21 +167,22 @@ UniDB.prototype.doAction = function(evnt) {
 					D.path.options[decodeURIComponent(option[0])] = true;
 				} else if (option.length == 2) {
 					if (typeof D.path.options[decodeURIComponent(option[0])] == "undefined") {
-						D.path.options[decodeURIComponent(option[0])] = decodeURIComponent(option[1]);
+						D.path.options[decodeURIComponent(option[0])] = sanitizeValue(decodeURIComponent(option[1]));
 					} else if (typeof D.path.options[decodeURIComponent(option[0])] == "object") {
-						D.path.options[decodeURIComponent(option[0])].push(decodeURIComponent(option[1]));
+						D.path.options[decodeURIComponent(option[0])].push(sanitizeValue(decodeURIComponent(option[1])));
 					} else {
 						D.path.options[decodeURIComponent(option[0])] = [ D.path.options[decodeURIComponent(option[0])] ];
-						D.path.options[decodeURIComponent(option[0])].push(decodeURIComponent(option[1]));
+						D.path.options[decodeURIComponent(option[0])].push(sanitizeValue(decodeURIComponent(option[1])));
 					}
 				} else if (option.length == 3) {
 					if (typeof D.path.options[decodeURIComponent(option[0])] == "undefined") {
 						D.path.options[decodeURIComponent(option[0])] = { };
 					}
-					D.path.options[decodeURIComponent(option[0])][decodeURIComponent(option[1])] = decodeURIComponent(option[2]);			
+					D.path.options[decodeURIComponent(option[0])][decodeURIComponent(option[1])] = sanitizeValue(decodeURIComponent(option[2]));
 				}
 			}
 		}
+        //console.log("Options: ", D.path.options);
 		var object = null;
 		if (D.path.section == "table") {
 			object = D.T(D.path.object);
@@ -220,75 +232,54 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 		requestHeaders = { };
 	}
 
-    if ([ 'GET', 'PUT', 'POST', 'DELETE' ].includes(method) && path) {
+    if ([ 'GET', 'PUT', 'POST', 'DELETE', 'OPTIONS' ].includes(method) && path) {
 
 		requestHeaders["Accept"] = returnType;
 
-		// check if we have a sessionID
-		// If we don't have a session token and the present call is not to the login
-		// endpoint, the command will inevitably fail with an unauthorized response.
-        // While we could call loginForm() even before attempting to execute the command,
-        // the bound-to-fail call will ensure that lower level errors (e.g. config file
-        // missing) will be reported instead of showing a login prompt.
-		if (D.sessionId) {
-			// pass our session token in Auth header
-			requestHeaders["Authorization"] = "Bearer " + D.sessionId;
-		}
+        if (path.slice(-1) != '/') {
+            path += '/';
+        }
 
-		return($.ajax({
+		// If we don't have a session token and the present call is not to the login
+		// endpoint, we show a login form.
+		if (window.sessionStorage.getItem("token")) {
+			// pass our session token in Auth header
+			requestHeaders["Authorization"] = "Bearer " + window.sessionStorage.getItem("token");
+		} else if (path != "/login/") {
+            // show login
+			return(D.loginForm(method, path, parameters, callback, failCallback));
+        }
+        return($.ajax({
 			type: method,								// method will be passed through
-			url: D.dbiUrl + path ,							// URL = base URL + path
+			url: D.dbiUrl + path ,						// URL = base URL + path
 			headers: requestHeaders ,
 			data: ( method == "GET" ? parameters : JSON.stringify(parameters) ) ,	// we'll send the paramterers as JSON object
 			processData: ( method == "GET" ? true : false ) ,			// thus, no processing ...
 			contentType: ( method == "GET" ? undefined : "application/json" ),	// and content-type set accordingly
 			dataType: ( returnType == "application/json" ? "json" : "text" ),	// if we expect JSON back, treat as such
 			error: function(jqxhr, errorText, errorObject) {
-				if ( (jqxhr.status == "401") && jqxhr.responseJSON.UniDB_requestLogin) {
-					// 401 -> login requested?
-					D.loginForm(method, path, parameters, callback, failCallback);
-				} else if ( (jqxhr.status == "401") && jqxhr.responseJSON.UniDB_fatalError) {
-					window.alert("Login failed: " + jqxhr.responseJSON.UniDB_fatalError);
-					D.loginForm(method, path, parameters, callback, failCallback);
-				} else {
-					// other error (e.g. JSON parse error, timeout, ...) occured
-					D.destroyOverlay();
-					// now we show an error message:
-					var addText = "";
-					if (errorText == "parsererror") {
-						addText = "\n\nData received: " + jqxhr.responseText;
-					} else if (jqxhr.responseJSON && jqxhr.responseJSON.UniDB_fatalError) {
-						addText = "\n\nUniDB error: " + jqxhr.responseJSON.UniDB_fatalError;
-					}
-					// now a dialog window will be shown:
-					window.confirm(	"Request failed: " + errorText +
-							"\n\nRequest: " + method + " " + D.dbiUrl + path +
-							"\n\nHTTP Status: " + jqxhr.status + " " + jqxhr.statusText +
-							( errorObject ? "\n\nerrorObject: " + errorObject : "" ) +
-							addText +
-							"\n\nShow log?")
-						&& D.printLog();
-					// call failCallback, if specified
-					if (typeof failCallback == "function") { failCallback(errorText); }
+				// other error (e.g. JSON parse error, timeout, ...) occured
+				D.destroyOverlay();
+				// now we show an error message:
+				var addText = "Request failed: " + errorText +
+						"\n\nRequest: " + method + " " + D.dbiUrl + path +
+						"\n\nHTTP Status: " + jqxhr.status + " " + jqxhr.statusText +
+						( errorObject ? "\n\nerrorObject: " + errorObject : "" );
+				if (errorText == "parsererror") {
+					addText += "\n\nData received: " + jqxhr.responseText;
+				} else if (jqxhr.responseJSON && jqxhr.responseJSON.non_field_errors) {
+					addText += "\n\nUniDB error: " + jqxhr.responseJSON.non_field_errors;
 				}
-				return(false);
+				// now a dialog window will be shown:
+				window.alert(addText);
+				// call failCallback, if specified
+				if (typeof failCallback == "function") {
+					failCallback(errorText, jqxhr.responseJSON);
+				} else {
+					return(false);
+				}
 			},
 			success: function(data, statusText, jqxhr) {
-				if (data && data.UniDB_fatalError != undefined) {
-					// error occured as a result of the command
-					D.destroyOverlay();
-					// now a dialog window will be shown:
-					window.confirm("UniDB command failed with fatal error:\n\n"+data.UniDB_fatalError+"\n\nShow log?")
-						&& D.printLog();
-					// call failCallback, if specified
-					if (typeof failCallback == "function") { failCallback(data.UniDB_fatalError); }
-					return(false);
-				}
-				if (data && data.UniDB_requestLogin != undefined) {
-					// we need to (re-)login: show a login form, and this will - if successful - call the original command (again)
-					D.loginForm(method, path, parameters, callback, failCallback);
-					return(false);
-				}
 				// function to deal with the data
 				if (typeof callback == "function") { callback(data, jqxhr); }
 				// last step: re-enable form / remove overlay div
@@ -309,25 +300,27 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 UniDB.prototype.loginForm = function (method, path, options, callback, failCallback) {
 	var D = this;	// safe in separate variable, since "this" points to sth else in callbacks
 
-	var loginForm = {	username: { label: "Username",	type: "char",		size: 20 },
-				password: { label: "Password",	type: "password",	size: 20 }
+	var loginForm = {	username: { label: "Username",	type: "string",		size: 20 },
+						password: { label: "Password",	type: "password",	size: 20 }
 			};
 	// submit function
 	new SimpleDialog(D, "login-form", "Please log in", loginForm, function(dialog, dialog_callback) {
 		var loginData = {};
 		loginData["username"] = dialog.Fields["username"].value();
 		loginData["password"] = dialog.Fields["password"].value();
-		D.cmd("POST", "/login", loginData, function(data) {
-				if (data.UniDB_fatalError != undefined || data.UniDB_motd == undefined) {
-					window.alert("Login failed:\n\n"+data.UniDB_fatalError);
-					D.loginForm(method, path, options, callback, failCallback);
-				} else {
-					D.sessionId = data.session;	// this session ID will be our token
-					D.cookies.setItem("UniDB-session", D.sessionId);
+		D.cmd("POST", "/login/", loginData, function(data) {
+				if (data.token) {
+	                window.sessionStorage.setItem("token", data.token);
 					D.motd = data.UniDB_motd;	// motd (usually connect info)
 					// if login successful we call the original command (which triggered the login)
 					D.cmd(method, path, options, callback, failCallback);
+				} else {
+					window.alert("Login failed:\n\n" + data.non_field_errors);
+					D.loginForm(method, path, options, callback, failCallback);
 				}
+			}, function(errorText, data) {
+				//window.alert("Login failed:\n\n" + data.non_field_errors);
+				D.loginForm(method, path, options, callback, failCallback);
 			});
 		dialog_callback();
 	}, function() {
@@ -338,22 +331,14 @@ UniDB.prototype.loginForm = function (method, path, options, callback, failCallb
 /* logout(): obvious purpose */
 UniDB.prototype.logout = function () {
 	var D = this;
-	if (this.sessionId) {
-		this.cmd('GET', '/logout', { }, function(data) {
-			D.cookies.removeItem("UniDB-session");
-			D.sessionId = null;
-			$("#motd").text(data.UniDB_goodbye);
-			window.location.hash = '#';
-			window.location.reload();
-		}, function() {
-			window.location.hash = '#';
-			window.location.reload();
-		});
+	if (window.sessionStorage.getItem("token")) {
+        sessionStorage.removeItem('token');
+		$("#motd").text("[logged out]");
 	} else {
 		window.alert("you're already logged out...");
-		window.location.hash = '#';
-		window.location.reload();
 	}
+	window.location.hash = '#';
+	window.location.reload();
 }
 
 /*****
@@ -477,6 +462,11 @@ UniDB.prototype.queriesMenu = function() {
 
 }
 
+/* getPagesize(): return configured pagesize */
+UniDB.prototype.getPagesize = function() {
+    return(15);
+}
+
 /*****
  ***** actions: these are the actual functions offered by the UniDB class
  *****/
@@ -511,7 +501,7 @@ UniDB.prototype.menu = function () {
 				menuQueries.hide();
 			} else {
 				// update queries from server
-				D.cmd('GET', '/system/queries', undefined, function (data, jqxhr) {
+				D.cmd('GET', '/system/queries/', undefined, function (data, jqxhr) {
 					if (jqxhr.status != "304" && data.queries) {
 						D.mtime = jqxhr.getResponseHeader("Last-Modified");
 						D.initQueries(data.queries);
@@ -612,7 +602,7 @@ UniDB.prototype.showHome = function () {
 			delay: 250,
 			minLength: 3,
 			source: function(request, response) {
-				D.cmd('GET', '/system/search', { search: request.term }, function(data) {
+				D.cmd('GET', '/system/search/', { search: request.term }, function(data) {
 					$.each(D.Tables, function (table, tableObject) { //for (var table in D.Tables) {
 						if (tableObject.includeGlobalSearch && tableObject.allowNew) {
 							data.push({	table:		table,
@@ -641,7 +631,7 @@ UniDB.prototype.showHome = function () {
 		.appendTo("#content")
 		.keypress(function(evnt) {
 			if (evnt.which == 13) {
-				D.cmd('POST', '/system/queries', { userQuery: true, sql: evnt.target.value }, function(response) {
+				D.cmd('POST', '/system/queries/', { userQuery: true, sql: evnt.target.value }, function(response) {
 					var newQuery = new Table(D, response.name, response.info);
 					D.Queries[response.name] = newQuery;
 					D.QueriesAlpha.push(newQuery);
@@ -657,7 +647,7 @@ UniDB.prototype.showHome = function () {
 UniDB.prototype.printLog = function (evnt) {
 	var D = (evnt && evnt.data) ? evnt.data : this;	// safe in separate variable, since "this" points to sth else in callbacks
 
-	D.cmd('GET', '/system/log', undefined, function(data) {
+	D.cmd('GET', '/system/log/', undefined, function(data) {
 		new SimpleDialog(	D,
 					"form-debug",
 					"UniDB log",
@@ -669,80 +659,4 @@ UniDB.prototype.printLog = function (evnt) {
 					B_CLOSE );
 	});
 }
-
-
-/*\
-|*|
-|*|	:: cookies.js ::
-|*|
-|*|	A complete cookies reader/writer framework with full unicode support.
-|*|
-|*|	Revision #3 - July 13th, 2017
-|*|
-|*|	https://developer.mozilla.org/en-US/docs/Web/API/document.cookie
-|*|	https://developer.mozilla.org/User:fusionchess
-|*|	https://github.com/madmurphy/cookies.js
-|*|
-|*|	This framework is released under the GNU Public License, version 3 or later.
-|*|	http://www.gnu.org/licenses/gpl-3.0-standalone.html
-|*|
-|*|	Syntaxes:
-|*|
-|*|	* docCookies.setItem(name, value[, end[, path[, domain[, secure]]]])
-|*|	* docCookies.getItem(name)
-|*|	* docCookies.removeItem(name[, path[, domain]])
-|*|	* docCookies.hasItem(name)
-|*|	* docCookies.keys()
-|*|
-\*/
-
-UniDB.prototype.cookies = {
-
-	getItem: function (sKey) {
-		if (!sKey) { return null; }
-		return decodeURIComponent(document.cookie.replace(new RegExp("(?:(?:^|.*;)\\s*" + encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&") + "\\s*\\=\\s*([^;]*).*$)|^.*$"), "$1")) || null;
-	},
-	setItem: function (sKey, sValue, vEnd, sPath, sDomain, bSecure) {
-		if (!sKey || /^(?:expires|max\-age|path|domain|secure)$/i.test(sKey)) { return false; }
-		var sExpires = "";
-		if (vEnd) {
-			switch (vEnd.constructor) {
-				case Number:
-					sExpires = vEnd === Infinity ? "; expires=Fri, 31 Dec 9999 23:59:59 GMT" : "; max-age=" + vEnd;
-					/*
-					Note: Despite officially defined in RFC 6265, the use of `max-age` is not compatible with any
-					version of Internet Explorer, Edge and some mobile browsers. Therefore passing a number to
-					the end parameter might not work as expected. A possible solution might be to convert the the
-					relative time to an absolute time. For instance, replacing the previous line with:
-					*/
-					/*
-					sExpires = vEnd === Infinity ? "; expires=Fri, 31 Dec 9999 23:59:59 GMT" : "; expires=" + (new Date(vEnd * 1e3 + Date.now())).toUTCString();
-					*/
-					break;
-				case String:
-					sExpires = "; expires=" + vEnd;
-					break;
-				case Date:
-					sExpires = "; expires=" + vEnd.toUTCString();
-					break;
-			}
-		}
-		document.cookie = encodeURIComponent(sKey) + "=" + encodeURIComponent(sValue) + sExpires + (sDomain ? "; domain=" + sDomain : "") + (sPath ? "; path=" + sPath : "") + (bSecure ? "; secure" : "");
-		return true;
-	},
-	removeItem: function (sKey, sPath, sDomain) {
-		if (!this.hasItem(sKey)) { return false; }
-		document.cookie = encodeURIComponent(sKey) + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT" + (sDomain ? "; domain=" + sDomain : "") + (sPath ? "; path=" + sPath : "");
-		return true;
-	},
-	hasItem: function (sKey) {
-		if (!sKey || /^(?:expires|max\-age|path|domain|secure)$/i.test(sKey)) { return false; }
-		return (new RegExp("(?:^|;\\s*)" + encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&") + "\\s*\\=")).test(document.cookie);
-	},
-	keys: function () {
-		var aKeys = document.cookie.replace(/((?:^|\s*;)[^\=]+)(?=;|$)|^\s*|\s*(?:\=[^;]*)?(?:\1|$)/g, "").split(/\s*(?:\=[^;]*)?;\s*/);
-		for (var nLen = aKeys.length, nIdx = 0; nIdx < nLen; nIdx++) { aKeys[nIdx] = decodeURIComponent(aKeys[nIdx]); }
-		return aKeys;
-	}
-};
 

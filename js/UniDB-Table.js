@@ -1,6 +1,6 @@
 /*************************************************************************************************************/
-/***** Class: Table - one instance is created for every table, when page is loaded             ***************/
-/*****                (it persists throughout the session)                                     ***************/
+/***** Class: Table - one instance is created for every table, when page is loaded			 ***************/
+/*****				(it persists throughout the session)									 ***************/
 /*************************************************************************************************************/
 
 /*****
@@ -22,7 +22,13 @@ function Table (UniDB_instance, tableName, parameters) {
 	this.allowEdit = parameters.allowEdit;
 	this.allowDelete = parameters.allowDelete;
 	// columns
-	this.columns = parameters.columns;
+	this.columns = {};
+	this.columns[this.priKey] = parameters.columns[this.priKey]; // list priKey first
+	for (var column in parameters.columns) {
+		if (column != this.priKey && column != '_label') { // other columns
+			this.columns[column] = parameters.columns[column];
+		}
+	}
 	// templates
 	this.templates = parameters.templates;
 	// these are for user queries
@@ -37,7 +43,10 @@ function Table (UniDB_instance, tableName, parameters) {
 /* reset(): clear options, such as filters, number of records to skip, ... */
 Table.prototype.reset = function () {
 	// options to be passed to dbi.php
-	this.options = {};
+	this.options = {
+		offset: 0,
+		limit: this.D.getPagesize()
+	};
 }
 
 /* navigate(): refresh URL hash with current options */
@@ -47,41 +56,87 @@ Table.prototype.navigate = function () {
 	// this will trigger a new call to show()
 }
 
+/* click_first(): return closure that will go to first page */
+Table.prototype.click_first = function () {
+	var T = this;
+	return(function() {
+		T.reset();
+		T.navigate();
+	});
+}
+
+/* click_last(): return closure that will go to last page */
+Table.prototype.click_last = function (count) {
+	var T = this;
+	return(function() {
+		T.options.offset = Math.max(0, count - T.options.limit);
+		T.navigate();
+	});
+}
+
+/* click_prev(): return closure that will go to first page */
+Table.prototype.click_prev = function () {
+	var T = this;
+	return(function() {
+		T.options.offset = Math.max(0, T.options.offset - T.options.limit);
+		T.navigate();
+	});
+}
+
+/* click_next(): return closure that will go to first page */
+Table.prototype.click_next = function (count) {
+	var T = this;
+	return(function() {
+		T.options.offset = Math.min(Math.max(count - T.options.limit, 0), T.options.offset + T.options.limit);
+		T.navigate();
+	});
+}
+
 /* show(): the main function of the class, list records  */
 Table.prototype.show = function () {
 	var T = this;	// safe in separate variable, since "this" points to sth else in callbacks
 	var i, j;	// counters
 	// set UniDB Object's current Table to this one
 	T.D.currentTable = this;
+	// fall back to default values
+	if (!T.options.hasOwnProperty('offset') || isNaN(T.options.offset)) {
+		T.options.offset = 0;
+	}
+	if (!T.options.hasOwnProperty('limit') || isNaN(T.options.limit)) {
+		T.options.limit = this.D.getPagesize();
+	}
 	// run query
-	T.D.cmd('GET', '/' + T.section + '/' + T.tableName, T.options, function (data) {
+	T.D.cmd('GET', '/' + T.section + '/' + T.tableName + '/', T.options, function (data) {
 		// empty the content area and table-specific toolbars
 		var tContent	= $("#content").text("").removeClass("homepage");
 		var tInfo	= $("#table_info").text("");
 		var tButtons	= $("#table_buttons").text("");
 		var tNav	= $("#table_nav").text("");
 		var tSearch	= $("#table_search").text("");
+		var first_record = T.options.offset + 1
+		var last_record = T.options.offset + T.options.limit
 		// create navigation bar
 		$("<button/>", { html: "first record" } )
 			.button({ text: false, icons: { primary: "ui-icon-seek-start" }})
-			.click(function() { T.options.skip = 0; T.navigate(); })
+			.click(T.click_first())
 			.appendTo(tNav);
 		$("<button/>", { html: "page up" } )
 			.button({ text: false, icons: { primary: "ui-icon-seek-prev" }})
-			.click(function() { T.options.skip = data.pageUp; T.navigate(); })
+			.click(T.click_prev())
 			.appendTo(tNav);
 		$("<button/>",{ id: "refresh_table",
-				html: data.firstRecord+"-"+data.lastRecord+" of "+data.totalRecords+" records" } )
+				html: first_record + "-" + last_record + " of " + data.count + " records" } )
+				//html: (T.options.offset + 1) + "-" + (T.options.offset + T.options.limit + 1) + " of " + data.count + " records" } )
 			.button()
 			.click(function() { T.show(); })	// basically this just reloads the table
 			.appendTo(tNav);
 		$("<button/>", { html: "page down" } )
 			.button({ text: false, icons: { primary: "ui-icon-seek-next" }})
-			.click(function() { T.options.skip = data.pageDown; T.navigate(); })
+			.click(T.click_next(data.count))
 			.appendTo(tNav);
 		$("<button/>", { html: "last page" } )
 			.button({ text: false, icons: { primary: "ui-icon-seek-end" }})
-			.click(function() { T.options.skip = data.lastPage; T.navigate(); })
+			.click(T.click_last(data.count))
 			.appendTo(tNav);
 		tNav.buttonset();
 		// text search
@@ -137,41 +192,42 @@ Table.prototype.show = function () {
 		var tableBody = $("<tbody/>");
 		var columnNames = $("<tr/>", { id: "column_names" });
 		var filters = $("<tr/>", { id: "filters" });
-		for (var i=0; i < data.columns.length; i++) {
+		for (var column in T.columns) {
 			// first header spans two columns: action buttons and first data column
 			var header = $("<th/>");
 			var header2 = $("<th/>");
 			// button
-			$("<button/>", { href: "#", html: data.columns[i].description, "class": "sort-button" } )
-				.addClass( (T.options.order == data.columns[i].name)
-					|| (T.options.order == data.columns[i].name + " DESC") ? "column-sorted" : undefined )
-				.button({ icons: { secondary: ( T.options.order == data.columns[i].name ?
-					"ui-icon-triangle-1-n" : ( T.options.order == data.columns[i].name + " DESC" ?
+			$("<button/>", { href: "#", html: T.columns[column], "class": "sort-button" } )
+				.addClass( (T.options.ordering == column)
+					|| (T.options.ordering == '-' + column ) ? "column-sorted" : undefined )
+				.button({ icons: { secondary: ( T.options.ordering == column ?
+					"ui-icon-triangle-1-n" : ( T.options.ordering == "-" + column ?
 					"ui-icon-triangle-1-s" : "ui-icon-triangle-2-n-s" ) ) }})
 				.click( {	T:	T,
-						column:	data.columns[i].name,
-						desc:	( T.options.order == data.columns[i].name ? 1 : 0 ) } ,
+						column:	column,
+						desc:	( T.options.ordering == column ? 1 : 0 ) } ,
 					T.sortFunction )
 				.appendTo(header);
 			// filter drop down
-			if (data.columns[i].filter) {
+			if (data.facets && data.facets[column]) {
 				var filterOuter = $("<div/>", { "class": "filter-outer" } );
 				$("<span/>", { "class": "filter-button" })
-					.on("click", { T: T, column: data.columns[i].filter.column }, T.unfilterFunction)
+					.on("click", { T: T, column: column }, T.unfilterFunction)
 					.appendTo(filterOuter);
 				var filter = $("<select/>", { "class": "filter-select" });
 				$("<option/>", { value: undefined, text: '[all]' }).appendTo(filter);
-				for (var o=0; o < data.columns[i].filter.choices.length; o++) {
-					var option = $("<option/>", { value:	data.columns[i].filter.choices[o][0] === null ? 'NULL' : data.columns[i].filter.choices[o][0],
-							 text:	T.D.stripText(data.columns[i].filter.choices[o][1], false),
-							 title:	data.columns[i].filter.choices[o][1]
+				for (var o=0; o < data.facets[column].length; o++) {
+					var option = $("<option/>", {
+							value:	data.facets[column][o][0] === null ? 'NULL' : data.facets[column][o][0],
+							 text:	T.D.stripText(data.facets[column][o][0], false) + " (" + data.facets[column][o][1] + ")",
+							 title:	data.facets[column][o][0]
 					});
-					if (T.options.filter
-						&& T.options.filter[data.columns[i].filter.column] !== undefined
-						&& ( T.options.filter[data.columns[i].filter.column]
-						     == data.columns[i].filter.choices[o][0]
-						     || ( T.options.filter[data.columns[i].filter.column] == 'NULL'
-						          && data.columns[i].filter.choices[o][0] === null)
+					if (
+						T.options[column] !== undefined
+						&& ( T.options[column]
+							 == data.facets[column][o][0]
+							 || ( T.options[column] == 'NULL'
+								  && data.facets[column][o][0] === null)
 						) ) {
 						option.prop("selected","selected");
 						filter.addClass("filter-active");
@@ -179,7 +235,7 @@ Table.prototype.show = function () {
 					}
 					option.appendTo(filter);
 				}
-				filter.on("change", { T: T, column: data.columns[i].filter.column }, T.filterFunction);
+				filter.on("change", { T: T, column: column }, T.filterFunction);
 				filter.appendTo(filterOuter);
 				filterOuter.appendTo(header2);
 			}
@@ -189,13 +245,13 @@ Table.prototype.show = function () {
 		columnNames.appendTo(tableHead);
 		filters.appendTo(tableHead);
 		tableHead.appendTo(table);
-		for (var i=0; i < data.keys.length; i++) {
-			var thisKey = data.keys[i];
+		for (var i=0; i < data.results.length; i++) {
+			var thisKey = data.results[i][T.priKey];
 			var row = $("<tr/>", { id: "data_"+thisKey });
 			row.click(T.rowClickFunction);
-			for (j=0; j < data.data[i].length; j++) {
-				var cell = $("<td/>", { html: T.D.stripText(data.data[i][j], true) });
-				if (j == 0) { // first cell
+			for (var column in T.columns) {
+				var cell = $("<td/>", { html: T.D.stripText(data.results[i][column], true) });
+				if (column == T.priKey) {
 					cell.addClass("edit-delete-buttons");
 					var actButtons = $("<div/>");
 					$("<button/>", { html: (T.allowEdit ? "Edit" : "View") } )
@@ -215,7 +271,7 @@ Table.prototype.show = function () {
 							.button({ text: false, icons: { primary: "ui-icon-trash" }})
 							.click( {	T:	(T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
 									value:	thisKey,
-									name:	data.data[i][data.nameColumn] } , T.deleteFunction )
+									name:	data.results[i]['_label'] } , T.deleteFunction )
 							.appendTo(actButtons);
 					}
 					actButtons.buttonset().prependTo(cell);
@@ -282,17 +338,17 @@ Table.prototype.modify = function () {
 			});
 			columnSelect.menu();
 			var form = {
-				       columns: {			type: "raw",		value: columnSelect },
-					  name: { label: "ID",		type: "readonly",	value: T.tableName },
-				   description: { label: "Name",	type: "char", size: 50,	value: T.description },
-					   sql: { label: "SQL",		type: "text", size: 50,	value: T.sql },
-			       underlyingTable: { label: "Main table",	type: "select",		value: T.underlyingTable, options: tableSelect },
-				     saveQuery: { label: "Save?",	type: "checkbox",	value: T.saveQuery },
-				      isPublic: { label: "Public?",	type: "checkbox",	value: T.isPublic }
+					columns: {			type: "raw",									value: columnSelect },
+					name: {				label: "ID",			type: "readonly",		value: T.tableName },
+					description: {		label: "Name",			type: "char", size: 50,	value: T.description },
+					sql: {				label: "SQL",			type: "text", size: 50,	value: T.sql },
+					underlyingTable: {	label: "Main table",	type: "select",			value: T.underlyingTable, options: tableSelect },
+					saveQuery: {		label: "Save?",			type: "checkbox",		value: T.saveQuery },
+					isPublic: {			label: "Public?",		type: "checkbox",		value: T.isPublic }
 				};
 			new SimpleDialog(T.D, "edit-query", "Edit Query", form, function(dialog, callback) {
 				T.D.cmd("PUT", '/' + T.section + '/' + T.tableName,
-					       { description:		dialog.Fields["description"].value(),
+						   { description:		dialog.Fields["description"].value(),
 						 sql:			dialog.Fields["sql"].value(),
 						 underlyingTable:	dialog.Fields["underlyingTable"].value(),
 						 saveQuery:		dialog.Fields["saveQuery"].value(),
@@ -342,7 +398,7 @@ Table.prototype.download = function (evnt) {
 /* sortFunction(): sort by specified column */
 Table.prototype.sortFunction = function (evnt) {
 	var T = ( evnt.data.T ? evnt.data.T : this );
-	T.options.order = ( evnt.data.desc ? evnt.data.column + " DESC" : evnt.data.column );
+	T.options.ordering = ( evnt.data.desc ? "-" + evnt.data.column : evnt.data.column );
 	T.skip = 0;
 	T.navigate();
 }
@@ -350,15 +406,15 @@ Table.prototype.sortFunction = function (evnt) {
 /* filterFunction(): filter by selection */
 Table.prototype.filterFunction = function (evnt) {
 	var T = ( evnt.data.T ? evnt.data.T : this );
-	if (typeof T.options.filter == "undefined") {
+/*	if (typeof T.options.filter == "undefined") {
 		T.options.filter = {};
-	}
+	}*/
 	if (evnt.target.value == "[all]") {
-		delete T.options.filter[evnt.data.column];
+		delete T.options[evnt.data.column];
 		$(evnt.target).removeClass("filter-active");
 		$(evnt.target).parent().find(".filter-button").removeClass("filter-active");
 	} else {
-		T.options.filter[evnt.data.column] = evnt.target.value;
+		T.options[evnt.data.column] = evnt.target.value;
 		$(evnt.target).addClass("filter-active");
 		$(evnt.target).parent().find(".filter-button").addClass("filter-active");
 	}
@@ -373,8 +429,8 @@ Table.prototype.unfilterFunction = function (evnt) {
 		.parent().find(".filter-select")
 		.val("[all]")
 		.removeClass("filter-active");
-	if (typeof T.options.filter != "undefined") {
-		delete T.options.filter[evnt.data.column];
+	if (typeof T.options[evnt.data.column] != "undefined") {
+		delete T.options[evnt.data.column];
 		T.skip = 0;
 		T.navigate();
 	}
@@ -481,8 +537,7 @@ Table.prototype.downloadOneFunction = function(evnt) {
 Table.prototype.relatedFunction = function(evnt) {
 	var T = ( evnt.data.T ? evnt.data.T : this );
 	T.reset();
-	T.options.filter = { };
-	T.options.filter[T.tableName + '.' + evnt.data.relatedColumn] = evnt.data.value;
+	T.options[evnt.data.relatedColumn] = evnt.data.value;
 	T.D.dialogWindow.dialog("close");
 	T.navigate();
 	if (evnt.data.count == 0) {	// we immediately create a new record

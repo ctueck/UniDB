@@ -1,5 +1,5 @@
 /*************************************************************************************************************/
-/***** Class: Record - one instance is created ad hoc for editing or creating a new record     ***************/
+/***** Class: Record - one instance is created ad hoc for editing or creating a new record	 ***************/
 /*************************************************************************************************************/
 
 function Record (tableObject, key, keyColumn, callback) {
@@ -29,26 +29,37 @@ Record.prototype.initialise = function (callback) {
 	}
 
 	// now we load the record / a blank form from the server:
-	this.T.D.cmd(	"GET",
-			"/" + this.T.section + "/" + this.T.tableName + "/" + (this.key != undefined ? this.key : ".template" ) ,
-			options,
-			function (data) {
-				R.priKeyValue = data.fieldset[R.T.priKey].value;
-				R.related = data.related;
-				// now we iterate over the columns, and initialise Field objects
-				for (var col in data.fieldset) {
-					// we don't display the keyColumn if it is different from the PRIMARY KEY
-					if ( ! ( (R.keyColumn != R.T.priKey) && (col == R.keyColumn) ) ) {
-						if (R.Fields[col]) {		// if the field already exists, we only have to update the value
-							R.Fields[col].set(data.fieldset[col].value);
-						} else {
-							R.Fields[col] = new Field(R, col, data.fieldset[col]);
-						}
-					}
-				}
-				callback(R);	// call the callback with the new Record object as parameter
-			},
-			undefined);
+	this.T.D.cmd("OPTIONS", "/" + this.T.section + "/" + this.T.tableName + "/" + (this.key != undefined ? this.key : "" ) , options, function (metadata) {
+		if (R.key != undefined) {
+			R.T.D.cmd("GET", "/" + R.T.section + "/" + R.T.tableName + "/" + (R.key != undefined ? R.key : "" ) , options, function (data) {
+				R.priKeyValue = data[R.T.priKey];
+				R.name = data['_label'];
+				R.related = data['_related'] || [];
+				R.createFields(metadata["actions"]["PUT"], data, callback);
+			}, undefined);
+		} else {
+			R.createFields(metadata["actions"]["POST"], {}, callback);
+			R.related = {}
+		}
+	}, undefined);
+}
+
+// createFields(): make fields according to fetched record structure
+Record.prototype.createFields = function (metadata, data, callback) {
+	var R = this;
+	//	console.log("metadata=", metadata, "data=", data);
+	// now we iterate over the columns, and initialise Field objects
+	for (var col in metadata) {
+		// we don't display the keyColumn if it is different from the PRIMARY KEY
+		if (R.Fields[col]) {		// if the field already exists, we only have to update the value
+			R.Fields[col].set(data[col]);
+		} else {
+			if (col.charAt(0) != '_') {
+				R.Fields[col] = new Field(R, col, metadata[col], data[col]);
+			}
+		}
+	}
+	callback(R);	// call the callback with the new Record object as parameter
 }
 
 // showForm() : display an edit form
