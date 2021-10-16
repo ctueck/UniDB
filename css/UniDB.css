@@ -4,15 +4,15 @@ body {
 	font-size: 10pt;
 	padding: 0;
 	margin: 0;
-	background: #E4E9F1;
-	color: #222222;
+	background: #E9F4FA;
+	color: #333333;
 	height: 100vh;
 	display: flex;
 	flex-direction: column;
 }
 
 b,strong {
-	color: #10447D;
+	color: #033163;
 }
 
 div.menu_bar {
@@ -22,7 +22,7 @@ div.menu_bar {
 	justify-content: space-between;
 	padding: 2px;
 	margin: 0;
-	background: #92A4C4;
+	background: #ffffff;
 	flex: 0 0 auto;
 }
 div.menu_bar > div {
@@ -152,13 +152,12 @@ thead {
 	top: 0px;
 	z-index: 2;
 	padding-top: 2px;
-	background: #E4E9F1;
-	border-bottom: 1px solid #92A4C4;
+	background: #E9F4FA;
 }
 thead th:first-child {
 	position: sticky;
 	left: 0px;
-	background: #E4E9F1;
+	background: #E9F4FA;
 	z-index: 3;
 }
 th, td {
@@ -175,11 +174,11 @@ tbody tr:nth-child(odd) {
 	background: #ffffff;
 }
 tbody tr.selected {
-	background: #395E93;
+	background: #18498F;
 	color: #fff;
 }
 th {
-	color: #10447D;
+	color: #033163;
 	font-size: 100%;
 	text-align: left;
 }
@@ -190,13 +189,13 @@ th .sort-button {
 	margin-left: 0px;
 	font-size: 100% ! important;
 	font-weight: bold ! important;
-	color: #10447d;
+	color: #033163;
 }
 th .sort-button.column-sorted , th .sort-button:HOVER {
 	text-decoration: underline;
 }
 .sort-button .ui-icon {
-	background-image: url(jquery-ui/images/ui-icons_10447d_256x240.png);
+	background-image: url(jquery-ui/images/ui-icons_18498F_256x240.png);
 }
 .sort-button .ui-button-text {
 	padding-left: 0px;
@@ -207,13 +206,13 @@ th .filter-outer {
 	align-items: center;
 }
 th .filter-button {
-	background-image: url(jquery-ui/images/ui-icons_888888_256x240.png);
+	background-image: url(jquery-ui/images/ui-icons_333333_256x240.png);
 	background-position: -64px 0;
 	width: 16px;
 	height: 16px;
 }
 th .filter-button.filter-active {
-	background-image: url(jquery-ui/images/ui-icons_10447d_256x240.png);
+	background-image: url(jquery-ui/images/ui-icons_18498F_256x240.png);
 	background-position: -80px -128px;
 	cursor: pointer;
 }
@@ -237,7 +236,6 @@ td.edit-delete-buttons {
 	position: -webkit-sticky;
 	position: sticky;
 	left: 0px;
-	background: #E4E9F1;
 }
 tr:nth-child(odd) td.edit-delete-buttons {
 	background: white;
@@ -284,6 +282,14 @@ form {
 	display: grid;
 	grid-template-columns: 1fr 1fr 1fr 1fr;
 }
+form .non-field-errors {
+	display: none;
+}
+form .non-field-errors.ui-state-error {
+	display: block;
+	grid-column: 1 / 5;
+	padding: 5px;
+}
 form label {
 	grid-column: 1 / 2;
 	padding: 0 0 10px 0;
@@ -291,11 +297,11 @@ form label {
 }
 form div {
 	grid-column: 2 / 5;
+	margin: 0 0 10px 0;
 }
 form input,select {
-	margin: 0 0 10px 0;
 	border: none;
-	background: #fff;
+	background: #E9F4FA;
 	padding: 2px 5px;
 }
 form select {
@@ -316,12 +322,23 @@ form pre {
 }
 form input[readonly=readonly] {
 	color: #333;
-	background-color: #ddd;
+	background-color: #eee;
 }
 form .changed-value {
-	border: 1px solid #92A4C4;
-	color: #10447d;
+	border: 1px solid #18498F;
+	color: #18498F;
 	padding: 1px 4px;
+}
+form output.field-error {
+	display: none;
+}
+form .ui-state-error {
+	padding: 5px;
+}
+form .ui-state-error output.field-error {
+	display: block;
+	font-size: 95%;
+	margin: 5px 0 0 0;
 }
 .foreign-table-button {
 	height: 1.5em;
