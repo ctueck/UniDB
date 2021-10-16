@@ -89,9 +89,9 @@ function UniDB(dbiUrl) {
 		for (var tableName in data.tables) {
 			D.Tables[tableName] = new Table(D, tableName, data.tables[tableName]);
 		}
-        D.cmd('GET', '/system/queries/', undefined, function (data, jqxhr) {
+        D.cmd('GET', '/query/', undefined, function (data, jqxhr) {
             D.mtime = jqxhr.getResponseHeader("Last-Modified");
-            D.initQueries(data.queries);
+            D.initQueries(data);
 
             // construct menu
 		    D.menu();
@@ -256,8 +256,14 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 			data: ( method == "GET" ? parameters : JSON.stringify(parameters) ) ,	// we'll send the paramterers as JSON object
 			processData: ( method == "GET" ? true : false ) ,			// thus, no processing ...
 			contentType: ( method == "GET" ? undefined : "application/json" ),	// and content-type set accordingly
-			dataType: ( returnType == "application/json" ? "json" : "text" ),	// if we expect JSON back, treat as such
-			error: function(jqxhr, errorText, errorObject) {
+			dataType: ( returnType == "application/json" ? "json" : "text" )	// if we expect JSON back, treat as such
+            }).done(function(data, statusText, jqxhr) {
+				// function to deal with the data
+				if (typeof callback == "function") { callback(data, jqxhr); }
+				// last step: re-enable form / remove overlay div
+				D.destroyOverlay();
+				return(true);
+			}).fail(function(jqxhr, errorText, errorObject) {
 				// other error (e.g. JSON parse error, timeout, ...) occured
 				D.destroyOverlay();
 				// now we show an error message:
@@ -267,26 +273,16 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
 						( errorObject ? "\n\nerrorObject: " + errorObject : "" );
 				if (errorText == "parsererror") {
 					addText += "\n\nData received: " + jqxhr.responseText;
-				} else if (jqxhr.responseJSON && jqxhr.responseJSON.non_field_errors) {
-					addText += "\n\nUniDB error: " + jqxhr.responseJSON.non_field_errors;
 				}
-				// now a dialog window will be shown:
-				window.alert(addText);
 				// call failCallback, if specified
 				if (typeof failCallback == "function") {
 					failCallback(errorText, jqxhr.responseJSON);
 				} else {
+				    // now a dialog window will be shown:
+				    window.alert(addText);
 					return(false);
 				}
-			},
-			success: function(data, statusText, jqxhr) {
-				// function to deal with the data
-				if (typeof callback == "function") { callback(data, jqxhr); }
-				// last step: re-enable form / remove overlay div
-				D.destroyOverlay();
-				return(true);
-			}
-		}));
+			}));
     } else {
         if (path) {
             console.log("Method [" + method + "] is invalid.");
@@ -395,9 +391,9 @@ UniDB.prototype.initQueries = function(queries) {
 	this.Queries = {};
 	this.QueriesAlpha = [];
 	// data.queries is an Object, with the internal name as key and the description as value
-	for (var queryName in queries) {
-		this.Queries[queryName]= new Table(this, queryName, queries[queryName]);
-		this.QueriesAlpha.push(this.Queries[queryName]);
+	for (var query of queries) {
+		this.Queries[query.id]= new Query(this, query.id, query);
+		this.QueriesAlpha.push(this.Queries[query.id]);
 	}
 	this.QueriesAlpha.sort(function(a, b) {
 		var nameA = a.description.toUpperCase(); // ignore upper and lowercase
@@ -485,10 +481,6 @@ UniDB.prototype.menu = function () {
 	$("<a/>", { id: "btnLogout", text: "Logout", href: "#/logout" })
 		.button({ text: false, icons: { primary: "ui-icon-power" } })
 		.prependTo(menuSec);
-	$("<a/>", { id: "btnLog", text: "Log" })
-		.button({ icons: { primary: "ui-icon-script" } })
-		.on("click", D, D.printLog)
-		.prependTo(menuSec);
 	// menu of queries 
 	var menuQueries = $( "<ul/>", { id: "menuQueries" });
 	menuQueries.hide()	// hide (pops up when we click button)
@@ -501,10 +493,10 @@ UniDB.prototype.menu = function () {
 				menuQueries.hide();
 			} else {
 				// update queries from server
-				D.cmd('GET', '/system/queries/', undefined, function (data, jqxhr) {
-					if (jqxhr.status != "304" && data.queries) {
+				D.cmd('GET', '/query/', undefined, function (data, jqxhr) {
+					if (jqxhr.status != "304" && data.results) {
 						D.mtime = jqxhr.getResponseHeader("Last-Modified");
-						D.initQueries(data.queries);
+						D.initQueries(data);
                         D.queriesMenu();
 					}
 					$("#menuTables").hide();
@@ -592,28 +584,62 @@ UniDB.prototype.showHome = function () {
 	$("#table_buttons").text("");
 	$("#table_search").text("");
 	$("#motd").text(D.motd);
-	$("<div/>", { id: "global_search" }).appendTo("#content");
 	// global search
-	$("<input/>", { id: "search_term", type: "text", placeholder: "Search ..." })
+    D.globalSearch().appendTo("#content").wrap($("<div/>", { id: "global_search" }));
+	// ad-hoc query
+	$("<input/>", { id: "adhoc_sql", type: "text", placeholder: "SELECT * FROM ..." })
 		.prop("size","40")
-		.appendTo("#global_search")
+		.appendTo("#content")
+		.keypress(function(evnt) {
+			if (evnt.which == 13) {
+				D.cmd('POST', '/query/', { is_shared: false, sql: evnt.target.value, description: 'Ad-hoc query: ' + evnt.target.value }, function(response) {
+					var newQuery = new Query(D, response.id, response);
+					D.Queries[response.id] = newQuery;
+					D.QueriesAlpha.push(newQuery);
+					newQuery.show();
+				});
+				return(false);
+			}
+		})
+		.wrap($("<div/>", { id: "adhoc_query" }));
+}
+
+/* globalSearch(): return auto-complete input field for global search */
+UniDB.prototype.globalSearch = function () {
+    var D = this;
+	return($("<input/>", { id: "search_term", type: "text", placeholder: "Search ..." })
+		.prop("size","40")
 		.catcomplete({
 			appendTo: $("#content"),
 			delay: 250,
 			minLength: 3,
 			source: function(request, response) {
-				D.cmd('GET', '/system/search/', { search: request.term }, function(data) {
-					$.each(D.Tables, function (table, tableObject) { //for (var table in D.Tables) {
-						if (tableObject.includeGlobalSearch && tableObject.allowNew) {
-							data.push({	table:		table,
-									key:		tableObject.priKey,
+                var requests = [];
+                var results = [];
+				$.each(D.Tables, function(table, T) {
+				    if (T.includeGlobalSearch && T.searchable) {
+                        requests.push(D.cmd('GET', '/' + T.section + '/' + T.tableName + '/select/', { search: request.term }, function(data) {
+                            for (var line of data) {
+                                results.push({
+                                    table:      table,
+									key:		T.priKey,
+                                    value:      line[T.priKey],
+                                    category:   T.description,
+                                    label:      line._label
+                                });
+                            }
+                        }));
+                        if (T.allowNew) {
+							results.push({
+                                    table: 		table,
+									key:		T.priKey,
 									value:		null,
 									category:	"Create new record",
-									label:		tableObject.description });
+									label:		T.description });
 						}
-					});
-					response(data);
-				}, undefined, undefined, undefined, true);
+                    }
+                });
+                $.when.apply($, requests).then(function() { response(results); }, function() { window.alert('something went wrong'); });
 			},
 			select: function(evnt, selection) {
 				var T = ( D.T(selection.item.table).underlyingTable ?
@@ -624,39 +650,7 @@ UniDB.prototype.showHome = function () {
 				$("#search_term").val("");
 				return(false);
 			}
-		});
-	// ad-hoc query
-	$("<input/>", { id: "adhoc_sql", type: "text", placeholder: "SELECT * FROM ..." })
-		.prop("size","40")
-		.appendTo("#content")
-		.keypress(function(evnt) {
-			if (evnt.which == 13) {
-				D.cmd('POST', '/system/queries/', { userQuery: true, sql: evnt.target.value }, function(response) {
-					var newQuery = new Table(D, response.name, response.info);
-					D.Queries[response.name] = newQuery;
-					D.QueriesAlpha.push(newQuery);
-					newQuery.show();
-				});
-				return(false);
-			}
 		})
-		.wrap($("<div/>", { id: "adhoc_query" }));
-}
-
-/* printLog(): show the PHP backend log in a window */
-UniDB.prototype.printLog = function (evnt) {
-	var D = (evnt && evnt.data) ? evnt.data : this;	// safe in separate variable, since "this" points to sth else in callbacks
-
-	D.cmd('GET', '/system/log/', undefined, function(data) {
-		new SimpleDialog(	D,
-					"form-debug",
-					"UniDB log",
-					{ debug: {	type: "raw",
-							value: $("<pre/>", {	id:	"debug",
-										html:	data.UniDB_log }) } },
-					undefined,
-					undefined,
-					B_CLOSE );
-	});
+    );
 }
 

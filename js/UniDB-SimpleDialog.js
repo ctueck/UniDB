@@ -33,8 +33,7 @@ SimpleDialog.prototype.show = function () {
 
 	// now we iterate over the Fields 
 	for (var col in this.Fields) {
-		this.Fields[col].showLabel(editForm);
-		this.Fields[col].showField(editForm);
+		this.Fields[col].render(editForm);
 	}
 	editForm.appendTo(this.jqDialog);
 

@@ -35,35 +35,33 @@ Record.prototype.initialise = function (callback) {
 				R.priKeyValue = data[R.T.priKey];
 				R.name = data['_label'];
 				R.related = data['_related'] || [];
-				R.createFields(metadata["actions"]["PUT"], data, callback);
+				R.createFields(metadata["field_order"], metadata["actions"]["PUT"], data, callback);
 			}, undefined);
 		} else {
-			R.createFields(metadata["actions"]["POST"], {}, callback);
 			R.related = {}
+			R.createFields(metadata["field_order"], metadata["actions"]["POST"], {}, callback);
 		}
 	}, undefined);
 }
 
 // createFields(): make fields according to fetched record structure
-Record.prototype.createFields = function (metadata, data, callback) {
+Record.prototype.createFields = function (field_order, metadata, data, callback) {
 	var R = this;
-	//	console.log("metadata=", metadata, "data=", data);
+
 	// now we iterate over the columns, and initialise Field objects
-	for (var col in metadata) {
+	for (var col of field_order) {
 		// we don't display the keyColumn if it is different from the PRIMARY KEY
 		if (R.Fields[col]) {		// if the field already exists, we only have to update the value
 			R.Fields[col].set(data[col]);
 		} else {
-			if (col.charAt(0) != '_') {
-				R.Fields[col] = new Field(R, col, metadata[col], data[col]);
-			}
+			R.Fields[col] = new Field(R, col, metadata[col], data[col]);
 		}
 	}
 	callback(R);	// call the callback with the new Record object as parameter
 }
 
-// showForm() : display an edit form
-Record.prototype.showForm = function (jqDialog, setTitle) {
+// renderForm() : display an edit form
+Record.prototype.renderForm = function (jqDialog, setTitle) {
 	// jqDialog:	jQuery UI Dialog Object into which the form should be output
 	// setTitle:	flag whether title of dialog window should be set
 	
@@ -75,16 +73,46 @@ Record.prototype.showForm = function (jqDialog, setTitle) {
 	}
 
 	// create new, blank edit form
-	var editForm = $("<form/>", { id: this.T.tableName });
+	this.editForm = $("<form/>", { id: this.T.tableName });
+
+    // error field
+    this.errorText = $("<div/>", { "class": "non-field-errors", id: this.T.tableName + "-non-field-errors" });
+    this.errorText.appendTo(this.editForm);
 
 	var fields = Object.keys(this.Fields);
 	// iterate over the columns
 	for (var col in fields) {
-		this.Fields[fields[col]].showLabel(editForm);
-		this.Fields[fields[col]].showField(editForm);
+		this.Fields[fields[col]].render(this.editForm);
 	}
 
-	editForm.appendTo(jqDialog);
+	this.editForm.appendTo(jqDialog);
+}
+
+/* setErrors() : set Django field errors in Field instances */
+Record.prototype.setErrors = function (data) {
+	var R = this;	// for use in callback
+
+    console.log("setErrors:",data);
+    if (data === undefined) {
+        data = {};
+    }
+
+    // general error
+    if (data['non_field_errors']) {
+        this.errorText.text(data['non_field_errors']);
+        this.errorText.addClass('ui-state-error');
+    } else {
+        this.errorText.removeClass('ui-state-error');
+    }
+
+	// iterate over the columns
+	for (var col in this.Fields) {
+        if (data[col]) {
+		    this.Fields[col].set_error(data[col]);
+        } else {
+		    this.Fields[col].clear_error();
+        }
+	}
 }
 
 /* saveForm() : save the Record to database, call callback when done */
@@ -116,7 +144,11 @@ Record.prototype.save = function (callback, failCallback) {
 			R.keyColumn = R.T.priKey;
 			R.key = data[R.T.priKey];
 		}
+        R.setErrors();
 		callback(R);
-	}, failCallback); 
+	}, function(message, data) {
+        R.setErrors(data);
+        failCallback();
+    });
 }
 

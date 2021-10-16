@@ -23,13 +23,22 @@ function Field (DR, name, definition, value) {
     this.required = definition.required;                                                    // required field?
 	this.placeholder = definition.help_text || '';                                          // help text if available
 	this.options = definition.choices || [];
-	/*
+    this.field_error = null;
     this.foreign_table = definition.foreign_table;
 	this.foreign_key = definition.foreign_key;
+    this.min_value = definition.min_value;
+    this.max_value = definition.max_value;
+    this.max_digits = definition.max_digits;
+    this.decimal_places = definition.decimal_places;
+    /*
 	this.foreign_value = definition.foreign_value;
 	this.isRecordName = definition.isName;
     */
-	this.set(value);
+    if (value === undefined) {
+        this.set(definition.value);
+    } else {
+        this.set(value);
+    }
 }
 
 /* set() : set value */
@@ -55,18 +64,8 @@ Field.prototype.value = function() {
 	}
 }
 
-// label() : display a neat block including <label>
-Field.prototype.showLabel = function(target) {
-	if (this.label) {
-		$("<label/>", {	"for":	( this.R ? this.R.T.tableName : "" ) + "-" + this.name ,
-				id:	( this.R ? this.R.T.tableName : "" ) + "-" + this.name + "-label",
-				text:	this.label } )
-			.appendTo(target);
-	}
-}
-
-// show() : display a neat block including <label> and/or <input> (return as jQuery object)
-Field.prototype.showField = function(target) {
+// render() : display the field
+Field.prototype.render = function(target) {
 	var realThis = this;			// used in anonymous function
 
     // if type is hidden: just return
@@ -80,8 +79,15 @@ Field.prototype.showField = function(target) {
 		return(true);
 	}
 
+	if (this.label) {
+		$("<label/>", {	"for":	( this.R ? this.R.T.tableName : "" ) + "-" + this.name ,
+				id:	( this.R ? this.R.T.tableName : "" ) + "-" + this.name + "-label",
+				text:	this.label } )
+			.appendTo(target);
+	}
+
 	// other types: wrapped in outer <div/>
-	var outerDiv = $("<div/>", { id: ( this.R ? this.R.T.tableName : "" ) + "-" + this.name + "-outer" } );
+	this.outerDiv = $("<div/>", { id: ( this.R ? this.R.T.tableName : "" ) + "-" + this.name + "-outer" } );
 
 	// the main work is to display according to column type
 	switch (this.type) {
@@ -110,12 +116,34 @@ Field.prototype.showField = function(target) {
 			}
 			break;
 		case 'string':
-		case 'integer':
 			this.input = $("<input>", {	type:		"text",
 							name:		this.name, 
 							id:		( this.R ? this.R.T.tableName : "" )+"-"+this.name,
 							value:		this.oldValue,
 							placeholder:	this.placeholder })
+				.prop("size", this.size);
+			break;
+		case 'integer':
+            this.size = Math.floor(Math.log10(Math.max(Math.abs(this.min_value), Math.abs(this.max_value)))) + 3;
+			this.input = $("<input>", {	type:		"number",
+							name:		this.name,
+							id:		( this.R ? this.R.T.tableName : "" )+"-"+this.name,
+							value:		this.oldValue,
+							placeholder:	this.placeholder,
+                            min:            this.min_value,
+                            max:            this.max_value })
+				.prop("size", this.size);
+			break;
+		case 'decimal':
+            this.size = this.max_digits + 4;
+			this.input = $("<input>", {	type:		"number",
+							name:		this.name,
+							id:		( this.R ? this.R.T.tableName : "" )+"-"+this.name,
+							value:		this.oldValue,
+							placeholder:	this.placeholder,
+                            step:           (10 ** -this.decimal_places),
+                            min:            (-(10 ** (this.max_digits-this.decimal_places) - (10 ** -this.decimal_places))),
+                            max:            (10 ** (this.max_digits-this.decimal_places) - (10 ** -this.decimal_places)) })
 				.prop("size", this.size);
 			break;
 		case 'email':
@@ -170,17 +198,16 @@ Field.prototype.showField = function(target) {
 				option.appendTo(this.input);
 			}
 			break;
-		case 'date':	
+		case 'date':
 			this.input = $("<input>", {	type:		"date",
 							name:		this.name,
 							id:		( this.R ? this.R.T.tableName : "" )+"-"+this.name,
 							value:		this.oldValue,
 							placeholder:	this.placeholder })
-				.prop("size", this.size)
-				.datepicker({ dateFormat: "yy-mm-dd" });
+				.prop("size", this.size);
 			break;
-		case 'year':	
-			this.input = $("<input>", {	type:		"date",
+		case 'year':
+			this.input = $("<input>", {	type:		"text",
 							name:		this.name,
 							id:		( this.R ? this.R.T.tableName : "" )+"-"+this.name,
 							value:		this.oldValue,
@@ -206,30 +233,49 @@ Field.prototype.showField = function(target) {
 	});
 
 	// add <input> to outer container
-	this.input.appendTo(outerDiv);
+	this.input.appendTo(this.outerDiv);
 	
 	// create a download button if this is the PRIMARY KEY
 	if (this.isPriKey) {
 		$("<a/>", { text: "Fill template", "class": "foreign-table-button" })
 			.button({ text: false, icons: { primary: "ui-icon-copy" }})
 			.click(	{ T: this.R.T, value: this.oldValue }, this.R.T.downloadOneFunction )
-			.appendTo(outerDiv);
+			.appendTo(this.outerDiv);
 	}
 	// make a related records and an edit button, if this is a FOREIGN KEY
 	if (this.foreign_table != undefined) {
 		$("<a/>", { text: "Related records", "class": "foreign-table-button" } )
 			.button({ text: false, icons: { primary: "ui-icon-folder-open" }})
 			.click( { T: this.R.T, relatedColumn: this.name, value: this.oldValue }, this.R.T.relatedFunction )
-			.appendTo(outerDiv);
+			.appendTo(this.outerDiv);
 		$("<a/>", { text: (this.R.T.allowEdit ? "Edit" : "View" ),  "class": "foreign-table-button" } )
 			.button({ text: false, icons: { primary: (this.R.T.allowEdit ? "ui-icon-pencil" : "ui-icon-search") }})
 			.click(	{	T:	this.R.T.D.T(this.foreign_table),
 					value:	this.oldValue,
 					key:	this.foreign_key } , this.R.T.D.T(this.foreign_table).editFunction )
-			.appendTo(outerDiv);
+			.appendTo(this.outerDiv);
 	}
 
-	outerDiv.appendTo(target);
+    // create an element to show field errors
+    this.fieldError = $("<output/>", { "for": ( this.R ? this.R.T.tableName : "" ) + "-" + this.name ,
+            "class": "field-error",
+            id:	( this.R ? this.R.T.tableName : "" ) + "-" + this.name + "-error" } )
+        .appendTo(this.outerDiv);
+
+	this.outerDiv.appendTo(target);
 
 }
 
+/* set_error() : mark field as having an error */
+Field.prototype.set_error = function(reason) {
+    this.fieldError.text(reason);
+    this.input.addClass('ui-state-error');
+    this.outerDiv.addClass('ui-state-error');
+}
+
+/* clear_error() : mark field as ok/validated */
+Field.prototype.clear_error = function() {
+    this.fieldError.text('');
+    this.outerDiv.removeClass('ui-state-error');
+    this.input.removeClass('ui-state-error');
+}
