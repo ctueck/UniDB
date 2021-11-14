@@ -95,6 +95,8 @@ class Query {
         }
         // run query
         T.D.cmd('GET', '/' + T.section + '/' + T.tableName + '/', T.options, function (data) {
+            // keep the data in Table/Query instance
+            T.data = data
             // empty the content area and table-specific toolbars
             var tContent    = $("#content").text("").removeClass("homepage");
             var tInfo    = $("#table_info").text("");
@@ -180,12 +182,18 @@ class Query {
             var tableBody = $("<tbody/>");
             var columnNames = $("<tr/>", { id: "column_names" });
             var filters = $("<tr/>", { id: "filters" });
+            $("<th/>").appendTo(columnNames); // empty first cell (column for buttons)
+            $("<th/>").appendTo(filters);
             for (var column in ( T.columns ? T.columns : data.columns)) {
+                var column_name = T.columns ? T.columns[column] : data.columns[column];
+                if (column_name[0] == "_") {
+                    continue; // skip hidden columns
+                }
                 // first header spans two columns: action buttons and first data column
                 var header = $("<th/>");
                 var header2 = $("<th/>");
                 // button
-                $("<button/>", { href: "#", text: ( T.columns ? T.columns[column] : data.columns[column] ) , "class": "sort-button" } )
+                $("<button/>", { href: "#", text: column_name, "class": "sort-button" } )
                     .addClass( (T.options.ordering == column)
                         || (T.options.ordering == '-' + column ) ? "column-sorted" : undefined )
                     .button({ icons: { secondary: ( T.options.ordering == column ?
@@ -235,37 +243,38 @@ class Query {
             filters.appendTo(tableHead);
             tableHead.appendTo(table);
             for (var i=0; i < data.results.length; i++) {
-                var thisKey = data.results[i][T.priKey];
+                var thisKey = ( T.priKey == "_count" ? i : data.results[i][T.priKey]);
                 var row = $("<tr/>", { id: "data_"+thisKey });
                 row.click(T.rowClickFunction);
+                var actButtons = $("<div/>");
+                $("<button/>", { html: (T.allowEdit ? "Edit" : "View") } )
+                    .button({    text:    false,
+                            icons:    { primary: (T.allowEdit ? "ui-icon-pencil" : "ui-icon-search") }})
+                    .click(    {     T:    (T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
+                            value:    thisKey } , (T.underlyingTable ? T.D.T(T.underlyingTable).editFunction : T.editFunction) )
+                    .appendTo(actButtons);
+                $("<button/>", { html: "Fill template" } )
+                    .button({    text:    false,
+                            icons:    { primary: "ui-icon-copy" }})
+                    .click(    {     T:    (T.underlyingTable ? T.D.T(T.underlyingTable) : T ) ,
+                            value:    thisKey } , T.downloadOneFunction )
+                    .appendTo(actButtons);
+                if (T.allowDelete) {
+                    $("<button/>", { html: "Delete" } )
+                        .button({ text: false, icons: { primary: "ui-icon-trash" }})
+                        .click( {    T:    (T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
+                                value:    thisKey,
+                                name:    data.results[i]['_label'] } , (T.underlyingTable ? T.D.T(T.underlyingTable).deleteFunction : T.deleteFunction) )
+                        .appendTo(actButtons);
+                }
+                actButtons.buttonset();
+                $("<td/>", { class: "edit-delete-buttons" }).append(actButtons).appendTo(row);
                 for (var column in ( T.columns ? T.columns : data.columns )) {
-                    var cell = $("<td/>", { html: T.D.stripText(data.results[i][column], true) });
-                    if (column == T.priKey) {
-                        cell.addClass("edit-delete-buttons");
-                        var actButtons = $("<div/>");
-                        $("<button/>", { html: (T.allowEdit ? "Edit" : "View") } )
-                            .button({    text:    false,
-                                    icons:    { primary: (T.allowEdit ? "ui-icon-pencil" : "ui-icon-search") }})
-                            .click(    {     T:    (T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
-                                    value:    thisKey } , (T.underlyingTable ? T.D.T(T.underlyingTable).editFunction : T.editFunction) )
-                            .appendTo(actButtons);
-                        $("<button/>", { html: "Fill template" } )
-                            .button({    text:    false,
-                                    icons:    { primary: "ui-icon-copy" }})
-                            .click(    {     T:    (T.underlyingTable ? T.D.T(T.underlyingTable) : T ) ,
-                                    value:    thisKey } , T.downloadOneFunction )
-                            .appendTo(actButtons);
-                        if (T.allowDelete) {
-                            $("<button/>", { html: "Delete" } )
-                                .button({ text: false, icons: { primary: "ui-icon-trash" }})
-                                .click( {    T:    (T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
-                                        value:    thisKey,
-                                        name:    data.results[i]['_label'] } , (T.underlyingTable ? T.D.T(T.underlyingTable).deleteFunction : T.deleteFunction) )
-                                .appendTo(actButtons);
-                        }
-                        actButtons.buttonset().prependTo(cell);
+                    var column_name = T.columns ? T.columns[column] : data.columns[column];
+                    if (column_name[0] != "_") {
+                        var cell = $("<td/>", { html: T.D.stripText(data.results[i][column], true) });
+                        cell.appendTo(row);
                     }
-                    cell.appendTo(row);
                 }
                 row.appendTo(tableBody);
             }
@@ -362,6 +371,26 @@ class Query {
         return(false);
     }
 
+    /* getRecord() : return a single record including metadata, for dialog */
+    getRecord(key, keyColumn, callback) {
+        var T = this;
+        var metadata = {
+            field_order: [],
+            fields: {}
+        };
+        var data = {};
+        for (var column in T.data.columns) {
+            metadata["field_order"].push(T.data.columns[column]);
+            metadata["fields"][column] = {
+                name:       T.data.columns[column],
+                label:      ( T.data.columns[column][0] == "_" ? T.data.columns[column].slice(1) : T.data.columns[column] ),
+                type:       "pre"
+            };
+            data[column] = T.data.results[key][column];
+        }
+        callback(metadata, data);
+    }
+
     /***
      *** Event handlers:
      ***
@@ -411,6 +440,17 @@ class Query {
             delete T.options[evnt.data.column];
             T.skip = 0;
             T.navigate();
+        }
+    }
+
+    /* editFunction() : in case of Query, actually _view_ record in pop-up */
+    editFunction(evnt) {
+        var T = ( evnt.data.T ? evnt.data.T : this );
+        new Record(T, evnt.data.value, evnt.data.key, function(newRecord) {
+            new Dialog(T.D.dialogWindow, newRecord);
+        });
+        if (typeof evnt.stopPropagation === "function") {
+            evnt.stopPropagation();
         }
     }
 

@@ -49,4 +49,21 @@ class Table extends Query {
         }
     }
 
+    /* getRecord() : load a single record including metadata */
+    getRecord(key, keyColumn, callback) {
+        var T = this;
+        var options = {}
+        if (keyColumn != T.priKey) {
+		    options["key"] = keyColumn; // pass name of key column (if not PRIMARY KEY)
+        }
+	    T.D.cmd("OPTIONS", "/" + T.section + "/" + T.tableName + "/" + (key != undefined ? key : "" ) , options, function (metadata) {
+            if (key != undefined) {
+                T.D.cmd("GET", "/" + T.section + "/" + T.tableName + "/" + (key != undefined ? key : "" ) , options, function (data) {
+                    callback({ "field_order": metadata["field_order"], "fields": metadata["actions"]["PUT"] }, data);
+                });
+            } else {
+                callback({ "field_order": metadata["field_order"], "fields": metadata["actions"]["POST"] }, {});
+            }
+		});
+    }
 }

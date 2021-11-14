@@ -29,32 +29,30 @@ Record.prototype.initialise = function (callback) {
 	}
 
 	// now we load the record / a blank form from the server:
-	this.T.D.cmd("OPTIONS", "/" + this.T.section + "/" + this.T.tableName + "/" + (this.key != undefined ? this.key : "" ) , options, function (metadata) {
+    this.T.getRecord(this.key, this.keyColumn, function (metadata, data) {
 		if (R.key != undefined) {
-			R.T.D.cmd("GET", "/" + R.T.section + "/" + R.T.tableName + "/" + (R.key != undefined ? R.key : "" ) , options, function (data) {
-				R.priKeyValue = data[R.T.priKey];
-				R.name = data['_label'];
-				R.related = data['_related'] || [];
-				R.createFields(metadata["field_order"], metadata["actions"]["PUT"], data, callback);
-			}, undefined);
+			R.priKeyValue = data[R.T.priKey];
+			R.name = data['_label'];
+			R.related = data['_related'] || [];
+			R.createFields(metadata, data, callback);
 		} else {
 			R.related = {}
-			R.createFields(metadata["field_order"], metadata["actions"]["POST"], {}, callback);
+			R.createFields(metadata, {}, callback);
 		}
-	}, undefined);
+    });
 }
 
 // createFields(): make fields according to fetched record structure
-Record.prototype.createFields = function (field_order, metadata, data, callback) {
+Record.prototype.createFields = function (metadata, data, callback) {
 	var R = this;
 
 	// now we iterate over the columns, and initialise Field objects
-	for (var col of field_order) {
+	for (var col of metadata["field_order"]) {
 		// we don't display the keyColumn if it is different from the PRIMARY KEY
 		if (R.Fields[col]) {		// if the field already exists, we only have to update the value
 			R.Fields[col].set(data[col]);
 		} else {
-			R.Fields[col] = new Field(R, col, metadata[col], data[col]);
+			R.Fields[col] = new Field(R, col, metadata["fields"][col], data[col]);
 		}
 	}
 	callback(R);	// call the callback with the new Record object as parameter
