@@ -249,13 +249,25 @@ UniDB.prototype.cmd = function (method, path, parameters, callback, failCallback
             // show login
 			return(D.loginForm(method, path, parameters, callback, failCallback));
         }
+
+        // work-around to make sure also OPTIONS has parameters in query string
+        if ([ 'GET', 'OPTIONS' ].includes(method)) {
+            if (Object.keys(parameters).length > 0) {
+                path += '?' + $.param(parameters);
+            }
+            data = undefined;
+            contentType = undefined;
+        } else {
+            data = JSON.stringify(parameters);
+            contentType = "application/json";
+        }
         return($.ajax({
 			type: method,								// method will be passed through
 			url: D.dbiUrl + path ,						// URL = base URL + path
 			headers: requestHeaders ,
-			data: ( method == "GET" ? parameters : JSON.stringify(parameters) ) ,	// we'll send the paramterers as JSON object
-			processData: ( method == "GET" ? true : false ) ,			// thus, no processing ...
-			contentType: ( method == "GET" ? undefined : "application/json" ),	// and content-type set accordingly
+			data: data,	                                // we'll send the paramterers as JSON object
+			processData: false,			                // thus, no processing ...
+			contentType: contentType,               	// and content-type set accordingly
 			dataType: ( returnType == "application/json" ? "json" : "text" )	// if we expect JSON back, treat as such
             }).done(function(data, statusText, jqxhr) {
 				// function to deal with the data
