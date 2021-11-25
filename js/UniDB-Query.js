@@ -15,10 +15,10 @@ class Query {
 
     init(parameters) {
         this.section = 'query';
-        this.priKey = '_count';
         this.description = parameters.description;  // Human-readable name
         this.hidden = parameters.hidden;
         this.underlyingTable = parameters.underlying_table;
+        this.priKey = ( this.underlyingTable ? this.D.T(this.underlyingTable).priKey : '_count' );
         this.allowNew = ( this.underlyingTable ? this.D.T(this.underlyingTable).allowNew : false );
         this.allowEdit = ( this.underlyingTable ? this.D.T(this.underlyingTable).allowEdit : false );
         this.allowDelete = ( this.underlyingTable ? this.D.T(this.underlyingTable).allowDelete : false );
@@ -57,7 +57,7 @@ class Query {
     click_last(count) {
         var T = this;
         return(function() {
-            T.options.offset = Math.max(0, count - T.options.limit);
+            T.options.offset = Math.floor((count-1)/T.options.limit) * T.options.limit;
             T.navigate();
         });
     }
@@ -75,8 +75,10 @@ class Query {
     click_next(count) {
         var T = this;
         return(function() {
-            T.options.offset = Math.min(Math.max(count - T.options.limit, 0), T.options.offset + T.options.limit);
-            T.navigate();
+            if ( T.options.offset + T.options.limit < count ) {
+                T.options.offset = T.options.offset + T.options.limit;
+                T.navigate();
+            }
         });
     }
 
@@ -104,7 +106,7 @@ class Query {
             var tNav    = $("#table_nav").text("");
             var tSearch    = $("#table_search").text("");
             var first_record = T.options.offset + 1
-            var last_record = T.options.offset + T.options.limit
+            var last_record = ( T.options.offset + T.options.limit < data.count ? T.options.offset + T.options.limit : data.count );
             // create navigation bar
             $("<button/>", { html: "first record" } )
                 .button({ text: false, icons: { primary: "ui-icon-seek-start" }})
@@ -247,25 +249,27 @@ class Query {
                 var row = $("<tr/>", { id: "data_"+thisKey });
                 row.click(T.rowClickFunction);
                 var actButtons = $("<div/>");
-                $("<button/>", { html: (T.allowEdit ? "Edit" : "View") } )
-                    .button({    text:    false,
-                            icons:    { primary: (T.allowEdit ? "ui-icon-pencil" : "ui-icon-search") }})
-                    .click(    {     T:    (T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
-                            value:    thisKey } , (T.underlyingTable ? T.D.T(T.underlyingTable).editFunction : T.editFunction) )
-                    .appendTo(actButtons);
-                $("<button/>", { html: "Fill template" } )
-                    .button({    text:    false,
-                            icons:    { primary: "ui-icon-copy" }})
-                    .click(    {     T:    (T.underlyingTable ? T.D.T(T.underlyingTable) : T ) ,
-                            value:    thisKey } , T.downloadOneFunction )
-                    .appendTo(actButtons);
-                if (T.allowDelete) {
-                    $("<button/>", { html: "Delete" } )
-                        .button({ text: false, icons: { primary: "ui-icon-trash" }})
-                        .click( {    T:    (T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
-                                value:    thisKey,
-                                name:    data.results[i]['_label'] } , (T.underlyingTable ? T.D.T(T.underlyingTable).deleteFunction : T.deleteFunction) )
+                if (thisKey !== undefined) {
+                    $("<button/>", { html: (T.allowEdit ? "Edit" : "View") } )
+                        .button({    text:    false,
+                                icons:    { primary: (T.allowEdit ? "ui-icon-pencil" : "ui-icon-search") }})
+                        .click(    {     T:    (T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
+                                value:    thisKey } , (T.underlyingTable ? T.D.T(T.underlyingTable).editFunction : T.editFunction) )
                         .appendTo(actButtons);
+                    $("<button/>", { html: "Fill template" } )
+                        .button({    text:    false,
+                                icons:    { primary: "ui-icon-copy" }})
+                        .click(    {     T:    (T.underlyingTable ? T.D.T(T.underlyingTable) : T ) ,
+                                value:    thisKey } , T.downloadOneFunction )
+                        .appendTo(actButtons);
+                    if (T.allowDelete) {
+                        $("<button/>", { html: "Delete" } )
+                            .button({ text: false, icons: { primary: "ui-icon-trash" }})
+                            .click( {    T:    (T.underlyingTable ? T.D.T(T.underlyingTable) : T ),
+                                    value:    thisKey,
+                                    name:    data.results[i]['_label'] } , (T.underlyingTable ? T.D.T(T.underlyingTable).deleteFunction : T.deleteFunction) )
+                            .appendTo(actButtons);
+                    }
                 }
                 actButtons.buttonset();
                 $("<td/>", { class: "edit-delete-buttons" }).append(actButtons).appendTo(row);
