@@ -14,7 +14,7 @@ class Table extends Query {
         this.allowNew = parameters.allowNew;
         this.allowEdit = parameters.allowEdit;
         this.allowDelete = parameters.allowDelete;
-        // columns
+        // list display columns
         this.columns = {};
         this.columns[this.priKey] = parameters.columns[this.priKey]; // list priKey first
         for (var column in parameters.columns) {
@@ -22,6 +22,8 @@ class Table extends Query {
                 this.columns[column] = parameters.columns[column];
             }
         }
+        // all table columns
+        this.all_columns = parameters.all_columns;
     }
 
     /* deleteFunction(): delete one record after confirmation (called by delete button click) */
@@ -49,6 +51,23 @@ class Table extends Query {
         }
     }
 
+    getOrFakeMetadata(metadata, method) {
+        if (metadata.actions && metadata.actions[method]) {
+            return(metadata.actions[method]);
+        } else {
+            var faked_metadata = {};
+            for (var column in this.all_columns) {
+                faked_metadata[column] = {
+                    "label": this.all_columns[column],
+                    "read_only": true,
+                    "required": false,
+                    "type": "string"
+                };
+            }
+            return(faked_metadata);
+        }
+    }
+
     /* getRecord() : load a single record including metadata */
     getRecord(key, keyColumn, callback) {
         var T = this;
@@ -59,10 +78,10 @@ class Table extends Query {
 	    T.D.cmd("OPTIONS", "/" + T.section + "/" + T.tableName + "/" + (key != undefined ? key : "" ) , options, function (metadata) {
             if (key != undefined) {
                 T.D.cmd("GET", "/" + T.section + "/" + T.tableName + "/" + (key != undefined ? key : "" ) , options, function (data) {
-                    callback({ "field_order": metadata["field_order"], "fields": metadata["actions"]["PUT"] }, data);
+                    callback({ "field_order": metadata.field_order, "fields": T.getOrFakeMetadata(metadata, "PUT") }, data);
                 });
             } else {
-                callback({ "field_order": metadata["field_order"], "fields": metadata["actions"]["POST"] }, {});
+                callback({ "field_order": metadata.field_order, "fields": T.getOrFakeMetadata(metadata, "POST") }, {});
             }
 		});
     }
