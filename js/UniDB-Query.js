@@ -17,6 +17,7 @@ class Query {
         this.section = 'query';
         this.description = parameters.description;  // Human-readable name
         this.hidden = parameters.hidden;
+        this.searchable = parameters.searchable;
         this.underlyingTable = parameters.underlying_table;
         this.priKey = ( this.underlyingTable ? this.D.T(this.underlyingTable).priKey : '_count' );
         this.allowNew = ( this.underlyingTable ? this.D.T(this.underlyingTable).allowNew : false );
@@ -336,12 +337,13 @@ class Query {
             });
             columnSelect.menu();
             var form = {
-                    columns: {            type: "raw",                                    value: columnSelect },
-                    name: {                label: "ID",            type: "readonly",        value: T.tableName },
-                    description: {        label: "Name",            type: "string", size: 50, value: T.description },
-                    sql: {                label: "SQL",            type: "text",           value: T.sql },
-                    underlyingTable: {    label: "Main table",    type: "choice",            value: T.underlyingTable, choices: tableSelect },
-                    isPublic: {            label: "Public?",        type: "boolean",        value: T.isPublic }
+                    columns:            {                       type: "raw",        value: columnSelect },
+                    name:               { label: "ID",          type: "readonly",   value: T.tableName },
+                    description:        { label: "Name",        type: "string",     value: T.description,       size: 50 },
+                    sql:                { label: "SQL",         type: "text",       value: T.sql },
+                    underlyingTable:    { label: "Main table",  type: "choice",     value: T.underlyingTable,   choices: tableSelect },
+                    owner:              { label: "Owner",       type: "readonly",   value: T.owner },
+                    isPublic:           { label: "Public?",     type: "boolean",    value: T.isPublic }
                 };
             new SimpleDialog(T.D, "edit-query", "Edit Query", form, function(dialog, callback) {
                 T.D.cmd("PUT", '/query/' + T.tableName, {
