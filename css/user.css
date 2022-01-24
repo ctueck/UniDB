@@ -1,0 +1,250 @@
+/* User-defined CSS for UniDB */
+
+/* DIALOG WINDOW:
+ *
+ * <div id="dialog_window" class="ui-dialog-content ui-widget-content">
+ * 	<form id="[TABLE]">   <------   display: grid;
+ *		<label id="[TABLE]-[COLUMN]-label" for="[TABLE]-[COLUMN]">...</label>
+ *		<div id="[TABLE]-[COLUMN]-outer">
+ *			<input/select id="[TABLE]-[COLUMN]" ... />
+ *			[+ buttons for foreign tables if needed]
+ *		</div>
+ *		...
+ *	</form>
+ * </div>
+ */
+
+/************************************** TABLE clarification requests **********************************/
+
+form#applicationclarification								{ grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr; }
+
+form#applicationclarification div							{ grid-column: 2 / 9; }
+
+form#applicationclarification label#applicationclarification-id-label			{ grid-row: 1; }
+form#applicationclarification div#applicationclarification-id-outer			{ grid-row: 1; }
+
+form#applicationclarification label#applicationclarification-application-label		{ grid-row: 2; }
+form#applicationclarification div#applicationclarification-application-outer		{ grid-row: 2; grid-column: 2 / 5; }
+form#applicationclarification label#applicationclarification-sentOn-label		{ grid-row: 2; grid-column: 5 / 7; }
+form#applicationclarification div#applicationclarification-sentOn-outer			{ grid-row: 2; grid-column: 7 / 9; }
+
+form#applicationclarification label#applicationclarification-type-label			{ grid-row: 3; }
+form#applicationclarification div#applicationclarification-type-outer			{ grid-row: 3; grid-column: 2 / 5; }
+form#applicationclarification label#applicationclarification-replyOn-label		{ grid-row: 3; grid-column: 5 / 7; }
+form#applicationclarification div#applicationclarification-replyOn-outer		{ grid-row: 3; grid-column: 7 / 9; }
+
+form#applicationclarification label#applicationclarification-recipientOrg-label		{ grid-row: 4; }
+form#applicationclarification div#applicationclarification-recipientOrg-outer		{ grid-row: 4; }
+
+form#applicationclarification label#applicationclarification-recipientContact-label	{ grid-row: 5; }
+form#applicationclarification div#applicationclarification-recipientContact-outer	{ grid-row: 5; }
+
+form#applicationclarification label#applicationclarification-esg_2_1-label		{ grid-row: 6; grid-column: 2; }
+form#applicationclarification div#applicationclarification-esg_2_1-outer		{ grid-row: 7; grid-column: 2; }
+form#applicationclarification label#applicationclarification-esg_3_1-label		{ grid-row: 8; grid-column: 2; }
+form#applicationclarification div#applicationclarification-esg_3_1-outer		{ grid-row: 9; grid-column: 2; }
+
+form#applicationclarification label#applicationclarification-esg_2_2-label		{ grid-row: 6; grid-column: 3; }
+form#applicationclarification div#applicationclarification-esg_2_2-outer		{ grid-row: 7; grid-column: 3; }
+form#applicationclarification label#applicationclarification-esg_3_2-label		{ grid-row: 8; grid-column: 3; }
+form#applicationclarification div#applicationclarification-esg_3_2-outer		{ grid-row: 9; grid-column: 3; }
+
+form#applicationclarification label#applicationclarification-esg_2_3-label		{ grid-row: 6; grid-column: 4; }
+form#applicationclarification div#applicationclarification-esg_2_3-outer		{ grid-row: 7; grid-column: 4; }
+form#applicationclarification label#applicationclarification-esg_3_3-label		{ grid-row: 8; grid-column: 4; }
+form#applicationclarification div#applicationclarification-esg_3_3-outer		{ grid-row: 9; grid-column: 4; }
+
+form#applicationclarification label#applicationclarification-esg_2_4-label		{ grid-row: 6; grid-column: 5; }
+form#applicationclarification div#applicationclarification-esg_2_4-outer		{ grid-row: 7; grid-column: 5; }
+form#applicationclarification label#applicationclarification-esg_3_4-label		{ grid-row: 8; grid-column: 5; }
+form#applicationclarification div#applicationclarification-esg_3_4-outer		{ grid-row: 9; grid-column: 5; }
+
+form#applicationclarification label#applicationclarification-esg_2_5-label		{ grid-row: 6; grid-column: 6; }
+form#applicationclarification div#applicationclarification-esg_2_5-outer		{ grid-row: 7; grid-column: 6; }
+form#applicationclarification label#applicationclarification-esg_3_5-label		{ grid-row: 8; grid-column: 6; }
+form#applicationclarification div#applicationclarification-esg_3_5-outer		{ grid-row: 9; grid-column: 6; }
+
+form#applicationclarification label#applicationclarification-esg_2_6-label		{ grid-row: 6; grid-column: 7; }
+form#applicationclarification div#applicationclarification-esg_2_6-outer		{ grid-row: 7; grid-column: 7; }
+form#applicationclarification label#applicationclarification-esg_3_6-label		{ grid-row: 8; grid-column: 7; }
+form#applicationclarification div#applicationclarification-esg_3_6-outer		{ grid-row: 9; grid-column: 7; }
+
+form#applicationclarification label#applicationclarification-esg_2_7-label		{ grid-row: 6; grid-column: 8; }
+form#applicationclarification div#applicationclarification-esg_2_7-outer		{ grid-row: 7; grid-column: 8; }
+
+form#applicationclarification label#applicationclarification-notes-label		{ grid-row: 10; }
+
+/************************************** TABLE applications ********************************************/
+
+label#applications-selectName-label	{ display: none; }
+div#applications-selectName-outer	{ display: none; }
+
+label#applications-agency-label		{ grid-row: 2; } 
+div#applications-agency-outer		{ grid-row: 2; grid-column: 2 / 3; }
+
+label#applications-submitDate-label	{ grid-row: 2; grid-column: 3 / 4; text-align: right; padding-right: .5em; }
+div#applications-submitDate-outer	{ grid-row: 2; grid-column: 4 / 5; }
+
+label#applications-type-label		{ grid-row: 3; }
+div#applications-type-outer		{ grid-row: 3; grid-column: 2 / 3; }
+
+label#applications-eligibilityDate-label{ grid-row: 3; grid-column: 3 / 4; text-align: right; padding-right: .5em; }
+div#applications-eligibilityDate-outer	{ grid-row: 3; grid-column: 4 / 5; }
+
+label#applications-stage-label		{ grid-row: 4; }
+div#applications-stage-outer		{ grid-row: 4; grid-column: 2 / 3; }
+
+label#applications-reportExpected-label	{ grid-row: 4; grid-column: 3 / 4; text-align: right; padding-right: .5em; }
+div#applications-reportExpected-outer	{ grid-row: 4; grid-column: 4 / 5; }
+
+label#applications-reportDate-label	{ grid-row: 5; }
+div#applications-reportDate-outer	{ grid-row: 5; grid-column: 2 / 3; }
+
+label#applications-reportSubmitted-label { grid-row: 5; grid-column: 3 / 4; text-align: right; padding-right: .5em; }
+div#applications-reportSubmitted-outer	{ grid-row: 5; grid-column: 4 / 5; }
+
+label#applications-teleconfDate-label	{ grid-row: 7; grid-column: 3 / 4; text-align: right; padding-right: .5em; }
+div#applications-teleconfDate-outer	{ grid-row: 7; grid-column: 4 / 5; }
+
+div#applications-panel_2_1-outer,
+div#applications-panel_2_2-outer,
+div#applications-panel_2_3-outer,
+div#applications-panel_2_4-outer,
+div#applications-panel_2_5-outer,
+div#applications-panel_2_6-outer,
+div#applications-panel_2_7-outer,
+div#applications-panel_3_1-outer,
+div#applications-panel_3_2-outer,
+div#applications-panel_3_3-outer,
+div#applications-panel_3_4-outer,
+div#applications-panel_3_5-outer,
+div#applications-panel_3_6-outer	{ grid-column: 2 / 3; }
+
+div#applications-rapp_2_1-outer,
+div#applications-rapp_2_2-outer,
+div#applications-rapp_2_3-outer,
+div#applications-rapp_2_4-outer,
+div#applications-rapp_2_5-outer,
+div#applications-rapp_2_6-outer,
+div#applications-rapp_2_7-outer,
+div#applications-rapp_3_1-outer,
+div#applications-rapp_3_2-outer,
+div#applications-rapp_3_3-outer,
+div#applications-rapp_3_4-outer,
+div#applications-rapp_3_5-outer,
+div#applications-rapp_3_6-outer		{ grid-column: 3 / 4; }
+
+div#applications-rc_2_1-outer,
+div#applications-rc_2_2-outer,
+div#applications-rc_2_3-outer,
+div#applications-rc_2_4-outer,
+div#applications-rc_2_5-outer,
+div#applications-rc_2_6-outer,
+div#applications-rc_2_7-outer,
+div#applications-rc_3_1-outer,
+div#applications-rc_3_2-outer,
+div#applications-rc_3_3-outer,
+div#applications-rc_3_4-outer,
+div#applications-rc_3_5-outer,
+div#applications-rc_3_6-outer		{ grid-column: 4 / 5; }
+
+div#applications-panel_2_1-outer,
+div#applications-rapp_2_1-outer,
+div#applications-rc_2_1-outer		{ grid-row: 10; }
+
+div#applications-panel_2_2-outer,
+div#applications-rapp_2_2-outer,
+div#applications-rc_2_2-outer		{ grid-row: 11; }
+
+div#applications-panel_2_3-outer,
+div#applications-rapp_2_3-outer,
+div#applications-rc_2_3-outer		{ grid-row: 12; }
+
+div#applications-panel_2_4-outer,
+div#applications-rapp_2_4-outer,
+div#applications-rc_2_4-outer		{ grid-row: 13; }
+
+div#applications-panel_2_5-outer,
+div#applications-rapp_2_5-outer,
+div#applications-rc_2_5-outer		{ grid-row: 14; }
+
+div#applications-panel_2_6-outer,
+div#applications-rapp_2_6-outer,
+div#applications-rc_2_6-outer		{ grid-row: 15; }
+
+div#applications-panel_2_7-outer,
+div#applications-rapp_2_7-outer,
+div#applications-rc_2_7-outer		{ grid-row: 16; }
+
+div#applications-panel_3_1-outer,
+div#applications-rapp_3_1-outer,
+div#applications-rc_3_1-outer		{ grid-row: 17; }
+
+div#applications-panel_3_2-outer,
+div#applications-rapp_3_2-outer,
+div#applications-rc_3_2-outer		{ grid-row: 18; }
+
+div#applications-panel_3_3-outer,
+div#applications-rapp_3_3-outer,
+div#applications-rc_3_3-outer		{ grid-row: 19; }
+
+div#applications-panel_3_4-outer,
+div#applications-rapp_3_4-outer,
+div#applications-rc_3_4-outer		{ grid-row: 20; }
+
+div#applications-panel_3_5-outer,
+div#applications-rapp_3_5-outer,
+div#applications-rc_3_5-outer		{ grid-row: 21; }
+
+div#applications-panel_3_6-outer,
+div#applications-rapp_3_6-outer,
+div#applications-rc_3_6-outer		{ grid-row: 22; }
+
+label#applications-rapp_2_1-label,	label#applications-rc_2_1-label,
+label#applications-rapp_2_2-label,	label#applications-rc_2_2-label,
+label#applications-rapp_2_3-label,	label#applications-rc_2_3-label,
+label#applications-rapp_2_4-label,	label#applications-rc_2_4-label,
+label#applications-rapp_2_5-label,	label#applications-rc_2_5-label,
+label#applications-rapp_2_6-label,	label#applications-rc_2_6-label,
+label#applications-rapp_2_7-label,	label#applications-rc_2_7-label,
+label#applications-rapp_3_1-label,	label#applications-rc_3_1-label,
+label#applications-rapp_3_2-label,	label#applications-rc_3_2-label,
+label#applications-rapp_3_3-label,	label#applications-rc_3_3-label,
+label#applications-rapp_3_4-label,	label#applications-rc_3_4-label,
+label#applications-rapp_3_5-label,	label#applications-rc_3_5-label,
+label#applications-rapp_3_6-label,	label#applications-rc_3_6-label		{ display: none; }
+
+label#applications-result-label		{ grid-row: 23; }
+div#applications-result-outer		{ grid-row: 23; grid-column: 2 / 3; }
+label#applications-decisionDate-label	{ grid-row: 23; grid-column: 3 / 4; }
+div#applications-decisionDate-outer	{ grid-row: 23; grid-column: 4 / 5; }
+
+/************************************** TABLEs applications & changeReport **********************/
+
+div#applications-rapporteur1-outer,
+div#applications-rapporteur3-outer,
+div#changeReport-rapporteur1-outer,
+div#complaint-rapporteur1-outer		{ grid-column: 2 / 3; }
+
+label#applications-rapporteur2-label,
+label#changeReport-rapporteur2-label,
+label#complaint-rapporteur2-label	{ display: none; }
+
+div#applications-rapporteur2-outer,
+div#changeReport-rapporteur2-outer,
+div#complaint-rapporteur2-outer		{ grid-column: 3 / 4; }
+
+div#applications-rapporteur1-outer select,
+div#applications-rapporteur2-outer select,
+div#applications-rapporteur3-outer select,
+div#changeReport-rapporteur1-outer select,
+div#changeReport-rapporteur2-outer select,
+div#complaint-rapporteur1-outer select,
+div#complaint-rapporteur2-outer select { width: 80%; }
+
+/************************************** TABLE changeReport **************************************/
+
+div#changeReport-result-outer		{ grid-column: 2 / 3; }
+label#changeReport-decisionDate-label	{ grid-column: 3 / 4; text-align: right; padding-right: .5em; }
+div#changeReport-decisionDate-outer	{ grid-column: 4 / 5; }
+
