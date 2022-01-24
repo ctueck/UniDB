@@ -138,7 +138,7 @@ class Query {
                     .appendTo(tSearch)
                     .wrap($("<form/>", { name: "search_form", id: "search_form" }));
                 $("#search_form").submit(function () {
-                    T.options.skip = 0;
+                    T.options.offset = 0;
                     T.options.search = $("#search_term").val();
                     T.navigate();
                     return(false);
@@ -410,7 +410,7 @@ class Query {
     sortFunction(evnt) {
         var T = ( evnt.data.T ? evnt.data.T : this );
         T.options.ordering = ( evnt.data.desc ? "-" + evnt.data.column : evnt.data.column );
-        T.skip = 0;
+        T.options.offset = 0;
         T.navigate();
     }
 
@@ -429,7 +429,7 @@ class Query {
             $(evnt.target).addClass("filter-active");
             $(evnt.target).parent().find(".filter-button").addClass("filter-active");
         }
-        T.skip = 0;
+        T.options.offset = 0;
         T.navigate();
     }
 
@@ -442,7 +442,7 @@ class Query {
             .removeClass("filter-active");
         if (typeof T.options[evnt.data.column] != "undefined") {
             delete T.options[evnt.data.column];
-            T.skip = 0;
+            T.options.offset = 0;
             T.navigate();
         }
     }
