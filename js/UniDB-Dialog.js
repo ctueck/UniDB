@@ -36,7 +36,7 @@ Dialog.prototype.showRelated = function() {
         if (relation.T) {
 			hasRelatedTables = 1;		// set the flag to show related line
 			// if count is 0, the button will directly open a new record window
-			$("<button/>", { role: "button", html: relation.T.description +
+			$("<button/>", { role: "button", html: relation.T.description + ": " + relation.T.all_columns[relation.relatedColumn] +
 					( relation.count > 0 ? " (" + relation.count + ")" : " (add)" )
 					})
 				.button({ icons: { primary: 

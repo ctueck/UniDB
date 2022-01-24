@@ -553,16 +553,23 @@ class Query {
 
     relatedFunction(evnt) {
         var T = ( evnt.data.T ? evnt.data.T : this );
-        T.reset();
-        T.options[evnt.data.relatedColumn] = evnt.data.value;
-        T.D.dialogWindow.dialog("close");
-        T.navigate();
         if (evnt.data.count == 0) {    // we immediately create a new record
             new Record(T, undefined,
                 function(newRecord) {
                     newRecord.Fields[evnt.data.relatedColumn].oldValue = evnt.data.value;
                     new Dialog(T.D.dialogWindow, newRecord);
                 });
+        } else if (evnt.data.unique) {
+            new Record(T, evnt.data.value, evnt.data.relatedColumn,
+                function(newRecord) {
+                    new Dialog(T.D.dialogWindow, newRecord);
+                });
+        }
+        if (! evnt.data.unique) {
+            T.reset();
+            T.options[evnt.data.relatedColumn] = evnt.data.value;
+            T.D.dialogWindow.dialog("close");
+            T.navigate();
         }
     }
 
