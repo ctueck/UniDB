@@ -82,13 +82,26 @@ function UniDB(dbiUrl) {
 
 	// fetch the list of tables (this will also trigger a login, load configuration, etc.)
 	D.Tables = {};
+	D.TablesAlpha = [];
 	D.cmd('GET', "/system/tables/", undefined, function (data) {
 		D.Config = data.uiconfig;	// configuration passed from PHP
 		D.motd = data.UniDB_motd
 		// data.tables is an Object, with the SQL name as key and the description as value
 		for (var tableName in data.tables) {
 			D.Tables[tableName] = new Table(D, tableName, data.tables[tableName]);
+			D.TablesAlpha.push(D.Tables[tableName]);
 		}
+		D.TablesAlpha.sort(function(a, b) {
+			var nameA = a.description.toUpperCase(); // ignore upper and lowercase
+			var nameB = b.description.toUpperCase(); // ignore upper and lowercase
+			if (nameA < nameB) {
+				return -1;
+			}
+			if (nameA > nameB) {
+				return 1;
+			}
+			return 0;
+		});
         D.cmd('GET', '/query/', undefined, function (data, jqxhr) {
             D.mtime = jqxhr.getResponseHeader("Last-Modified");
             D.initQueries(data);
@@ -429,7 +442,7 @@ UniDB.prototype.queriesMenu = function() {
     var subMenus = { };
 
     // generate new entry for each query
-    $.each(D.QueriesAlpha, function (queryName, tableObject) { //for (var table in D.Tables) {
+    $.each(D.QueriesAlpha.reverse(), function (i, tableObject) { //for (var table in D.Tables) {
         var entry = $("<li/>");
         var category = null;
         var description = tableObject.description;
@@ -460,6 +473,7 @@ UniDB.prototype.queriesMenu = function() {
             entry.appendTo($("#menuQueries"));
         }
     });
+    $("<li/>", { text: '-' }).prependTo($("#menuQueries"));
     for (var category in subMenus) {
         var entry = $("<li/>");
         $("<a/>", { html: category })
@@ -472,7 +486,7 @@ UniDB.prototype.queriesMenu = function() {
 
 /* getPagesize(): return configured pagesize */
 UniDB.prototype.getPagesize = function() {
-    return(15);
+    return(20);
 }
 
 /*****
@@ -527,15 +541,11 @@ UniDB.prototype.menu = function () {
 		.prependTo(menuPri);
 	// menu of tables
 	var menuTables = $( "<ul/>", { id: "menuTables" });
-	$.each(D.Tables, function (table, tableObject) { //for (var table in D.Tables) {
+	$.each(D.TablesAlpha, function (i, tableObject) {
 		if (!tableObject.hidden) {
 			$( "<a/>", {	html: tableObject.description,
 					href: "#/table/" + tableObject.tableName })
 				.appendTo(menuTables)
-				/*.on("click",function() {
-					tableObject.reset();
-					tableObject.show();
-				})*/
 				.wrap($("<li/>"));
 		}
 	});
