@@ -102,6 +102,7 @@ ul.ui-autocomplete {
 	list-style: none;
 	padding-bottom: 10px;
 	overflow: scroll;
+	position: relative;
 }
 
 ul.ui-autocomplete li.ui-autocomplete-category {

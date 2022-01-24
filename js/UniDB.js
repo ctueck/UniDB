@@ -597,7 +597,7 @@ UniDB.prototype.showHome = function () {
 	$("#table_search").text("");
 	$("#motd").text(D.motd);
 	// global search
-    D.globalSearch().appendTo("#content").wrap($("<div/>", { id: "global_search" }));
+    D.globalSearch($("#content"));
 	// ad-hoc query
 	$("<input/>", { id: "adhoc_sql", type: "text", placeholder: "SELECT * FROM ..." })
 		.prop("size","40")
@@ -617,9 +617,11 @@ UniDB.prototype.showHome = function () {
 }
 
 /* globalSearch(): return auto-complete input field for global search */
-UniDB.prototype.globalSearch = function () {
+UniDB.prototype.globalSearch = function (target) {
     var D = this;
-	return($("<input/>", { id: "search_term", type: "text", placeholder: "Search ..." })
+	$("<input/>", { id: "search_term", type: "text", placeholder: "Search ..." })
+        .appendTo(target)
+        .wrap($("<div/>", { id: "global_search", class: "ui-front" }))
 		.prop("size","40")
 		.catcomplete({
 			appendTo: $("#content"),
@@ -641,7 +643,11 @@ UniDB.prototype.globalSearch = function () {
                                 });
                             }
                         }));
-                        if (T.allowNew) {
+                    }
+                });
+                $.when.apply($, requests).then(function() {
+				    $.each(D.Tables, function(table, T) {
+				        if (T.includeGlobalSearch && T.searchable && T.allowNew) {
 							results.push({
                                     table: 		table,
 									key:		T.priKey,
@@ -649,9 +655,9 @@ UniDB.prototype.globalSearch = function () {
 									category:	"Create new record",
 									label:		T.description });
 						}
-                    }
-                });
-                $.when.apply($, requests).then(function() { response(results); }, function() { window.alert('something went wrong'); });
+                    });
+                    response(results);
+                }, function() { window.alert('something went wrong'); });
 			},
 			select: function(evnt, selection) {
 				var T = ( D.T(selection.item.table).underlyingTable ?
@@ -662,7 +668,6 @@ UniDB.prototype.globalSearch = function () {
 				$("#search_term").val("");
 				return(false);
 			}
-		})
-    );
+		});
 }
 
