@@ -517,6 +517,9 @@ class Query {
                                     var metaName = metaNodes[i].getAttributeNS(NS_ODF_META, "name");
                                     if (typeof record[metaName] != "undefined") {
                                         metaOld.push(metaNodes[i]);
+                                    } else if (!metaName.startsWith("title_esg") && !metaName.startsWith("_")) {
+                                        // mark unknown/old fields used - ESG titles ignored, underscore can be used for other fields
+                                        metaNodes[i].textContent = "??? unknown field: " + metaName;
                                     }
                                 }
                                 for(var i in metaOld) {
