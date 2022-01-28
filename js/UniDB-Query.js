@@ -216,18 +216,29 @@ class Query {
                     var filter = $("<select/>", { "class": "filter-select" });
                     $("<option/>", { value: undefined, text: '[all]' }).appendTo(filter);
                     for (var o=0; o < data.facets[column].length; o++) {
-                        var label = (data.facets[column][o][2] ? data.facets[column][o][2] : data.facets[column][o][0])
+                        var label =
+                            ( data.facets[column][o][0] === null
+                            ? "[not assigned]"
+                            :   ( data.facets[column][o][2]
+                                    ? data.facets[column][o][2]
+                                    :   ( typeof data.facets[column][o][0] == "boolean"
+                                        ? ( data.facets[column][o][0] ? "Yes" : "No" )
+                                        : data.facets[column][o][0]
+                                        )
+                                )
+                            );
                         var option = $("<option/>", {
                                 value:    data.facets[column][o][0] === null ? 'NULL' : data.facets[column][o][0],
                                  text:    T.D.stripText(label, false) + " (" + data.facets[column][o][1] + ")",
                                  title:    label
                         });
-                        if (
-                            T.options[column] !== undefined
-                            && ( T.options[column]
-                                 == data.facets[column][o][0]
-                                 || ( T.options[column] == 'NULL'
-                                      && data.facets[column][o][0] === null)
+                        if ( T.options[column] !== undefined && (
+                                T.options[column] == data.facets[column][o][0]
+                             || ( T.options[column] == 'NULL' && data.facets[column][o][0] === null)
+                             || ( typeof data.facets[column][o][0] == "boolean" && (
+                                    (T.options[column] == "true" && data.facets[column][o][0])
+                                 || (T.options[column] == "false" && ! data.facets[column][o][0])
+                                ) )
                             ) ) {
                             option.prop("selected","selected");
                             filter.addClass("filter-active");
@@ -277,7 +288,10 @@ class Query {
                 for (var column in ( T.columns ? T.columns : data.columns )) {
                     var column_name = T.columns ? T.columns[column] : data.columns[column];
                     if (column_name[0] != "_") {
-                        var cell = $("<td/>", { html: T.D.stripText(data.results[i][column], true) });
+                        var cell = $("<td/>", { html: ( typeof data.results[i][column] == "boolean"
+                                        ? ( data.results[i][column] ? "Yes" : "No" )
+                                        : T.D.stripText(data.results[i][column], true)
+                                    ) });
                         cell.appendTo(row);
                     }
                 }
