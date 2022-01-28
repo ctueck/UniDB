@@ -382,7 +382,7 @@ class Query {
         // (= download is always complete)
         var T = evnt.data.T;
 
-        T.D.cmd('GET', '/' + T.section + '/' + T.tableName, $.extend({ "download": true }, T.options),
+        T.D.cmd('GET', '/' + T.section + '/' + T.tableName + '/download/', T.options,
             function (data) {
                 var CSV = new Blob([ data ], { type: MIME_CSV } );
                 var url = URL.createObjectURL(CSV);
