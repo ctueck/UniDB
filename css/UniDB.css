@@ -321,7 +321,10 @@ form pre {
 	padding: 0 0 10px 0;
 	margin: 0;
 }
-form input[readonly=readonly] {
+form span.readonly-field {
+	display: inline-block;
+	border: none;
+	padding: 2px 9px;
 	color: #333;
 	background-color: #eee;
 }

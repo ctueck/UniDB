@@ -30,10 +30,6 @@ function Field (DR, name, definition, value) {
     this.max_value = definition.max_value;
     this.max_digits = definition.max_digits;
     this.decimal_places = definition.decimal_places;
-    /*
-	this.foreign_value = definition.foreign_value;
-	this.isRecordName = definition.isName;
-    */
     if (value === undefined) {
         this.set(definition.value);
     } else {
@@ -92,18 +88,23 @@ Field.prototype.render = function(target) {
 	// the main work is to display according to column type
 	switch (this.type) {
 		case 'readonly':
-			this.input = $("<input/>", {	type:		"text",
-							id:		( this.R ? this.R.T.tableName : "" )+"-"+this.name,
-							readonly:	"readonly",
-							value:		( this.foreign_value ? this.foreign_value : this.oldValue ) })
-				.prop("size", this.size);
+			var display_name = this.oldValue;
+			for (var i = 0; i < this.options.length; i++) {
+				if (this.oldValue == this.options[i]['value'] == this.oldValue) {
+					display_name = this.options[i]['display_name'];
+				}
+			}
+			this.input = $("<span/>", {
+							class:  'readonly-field',
+							id:	 ( this.R ? this.R.T.tableName : "" )+"-"+this.name,
+							text:   display_name });
 			break;
 		case 'pre':
 			if ( this.oldValue == null ) {
 				this.input = $("<span/>", { text: "NULL", "class": "sql-null" });
 			} else {
 				this.input = $("<pre/>", {	id:		( this.R ? this.R.T.tableName : "" )+"-"+this.name,
-								text:		( this.foreign_value ? this.foreign_value : this.oldValue ) });
+								text:	this.oldValue });
 			}
 			break;
 		case 'boolean':
