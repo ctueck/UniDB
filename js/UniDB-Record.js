@@ -49,11 +49,7 @@ Record.prototype.createFields = function (metadata, data, callback) {
 	// now we iterate over the columns, and initialise Field objects
 	for (var col of metadata["field_order"]) {
 		// we don't display the keyColumn if it is different from the PRIMARY KEY
-		if (R.Fields[col]) {		// if the field already exists, we only have to update the value
-			R.Fields[col].set(data[col]);
-		} else {
-			R.Fields[col] = new Field(R, col, metadata["fields"][col], data[col]);
-		}
+		R.Fields[col] = new Field(R, col, metadata["fields"][col], data[col]);
 	}
 	callback(R);	// call the callback with the new Record object as parameter
 }
