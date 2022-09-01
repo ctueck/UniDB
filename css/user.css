@@ -76,153 +76,264 @@ form#applicationclarification label#applicationclarification-notes-label		{ grid
 
 /************************************** TABLE applications ********************************************/
 
-label#applications-selectName-label	{ display: none; }
-div#applications-selectName-outer	{ display: none; }
+form#applications			{ grid-template-columns: 2fr 1fr 2fr 2fr 2fr 2fr 2fr 2fr; }
+form#applications label			{ grid-column: 1 / 3; }
+form#applications div			{ grid-column: 3 / 9; }
 
-label#applications-agency-label		{ grid-row: 2; } 
-div#applications-agency-outer		{ grid-row: 2; grid-column: 2 / 3; }
+form#applications label#applications-selectName-label	{ display: none; }
+form#applications div#applications-selectName-outer	{ display: none; }
 
-label#applications-submitDate-label	{ grid-row: 2; grid-column: 3 / 4; text-align: right; padding-right: .5em; }
-div#applications-submitDate-outer	{ grid-row: 2; grid-column: 4 / 5; }
+form#applications label#applications-agency-label	{ grid-row: 2; }
+form#applications div#applications-agency-outer		{ grid-row: 2; grid-column: 3 / 5; }
 
-label#applications-type-label		{ grid-row: 3; }
-div#applications-type-outer		{ grid-row: 3; grid-column: 2 / 3; }
+form#applications label#applications-submitDate-label	{ grid-row: 2; grid-column: 6 / 8; text-align: right; padding-right: .5em; }
+form#applications div#applications-submitDate-outer	{ grid-row: 2; grid-column: 8 / 9; }
 
-label#applications-eligibilityDate-label{ grid-row: 3; grid-column: 3 / 4; text-align: right; padding-right: .5em; }
-div#applications-eligibilityDate-outer	{ grid-row: 3; grid-column: 4 / 5; }
+form#applications label#applications-type-label		{ grid-row: 3; }
+form#applications div#applications-type-outer		{ grid-row: 3; grid-column: 3 / 4; }
 
-label#applications-stage-label		{ grid-row: 4; }
-div#applications-stage-outer		{ grid-row: 4; grid-column: 2 / 3; }
+form#applications label#applications-review-label	{ display: none; }
+form#applications div#applications-review-outer		{ grid-row: 3; grid-column: 4 / 6; }
 
-label#applications-reportExpected-label	{ grid-row: 4; grid-column: 3 / 4; text-align: right; padding-right: .5em; }
-div#applications-reportExpected-outer	{ grid-row: 4; grid-column: 4 / 5; }
+form#applications label#applications-eligibilityDate-label	{ grid-row: 3; grid-column: 6 / 8; text-align: right; padding-right: .5em; }
+form#applications div#applications-eligibilityDate-outer	{ grid-row: 3; grid-column: 8 / 9; }
 
-label#applications-reportDate-label	{ grid-row: 5; }
-div#applications-reportDate-outer	{ grid-row: 5; grid-column: 2 / 3; }
+form#applications label#applications-stage-label	{ grid-row: 4; }
+form#applications div#applications-stage-outer		{ grid-row: 4; grid-column: 3 / 5; }
 
-label#applications-reportSubmitted-label { grid-row: 5; grid-column: 3 / 4; text-align: right; padding-right: .5em; }
-div#applications-reportSubmitted-outer	{ grid-row: 5; grid-column: 4 / 5; }
+form#applications label#applications-reportExpected-label	{ grid-row: 4; grid-column: 6 / 8; text-align: right; padding-right: .5em; }
+form#applications div#applications-reportExpected-outer		{ grid-row: 4; grid-column: 8 / 9; }
 
-label#applications-teleconfDate-label	{ grid-row: 7; grid-column: 3 / 4; text-align: right; padding-right: .5em; }
-div#applications-teleconfDate-outer	{ grid-row: 7; grid-column: 4 / 5; }
+form#applications label#applications-reportDate-label	{ grid-row: 5; }
+form#applications div#applications-reportDate-outer	{ grid-row: 5; grid-column: 3 / 5; }
 
-div#applications-panel_2_1-outer,
-div#applications-panel_2_2-outer,
-div#applications-panel_2_3-outer,
-div#applications-panel_2_4-outer,
-div#applications-panel_2_5-outer,
-div#applications-panel_2_6-outer,
-div#applications-panel_2_7-outer,
-div#applications-panel_3_1-outer,
-div#applications-panel_3_2-outer,
-div#applications-panel_3_3-outer,
-div#applications-panel_3_4-outer,
-div#applications-panel_3_5-outer,
-div#applications-panel_3_6-outer	{ grid-column: 2 / 3; }
+form#applications label#applications-reportSubmitted-label	{ grid-row: 5; grid-column: 6 / 8; text-align: right; padding-right: .5em; }
+form#applications div#applications-reportSubmitted-outer	{ grid-row: 5; grid-column: 8 / 9; }
 
-div#applications-rapp_2_1-outer,
-div#applications-rapp_2_2-outer,
-div#applications-rapp_2_3-outer,
-div#applications-rapp_2_4-outer,
-div#applications-rapp_2_5-outer,
-div#applications-rapp_2_6-outer,
-div#applications-rapp_2_7-outer,
-div#applications-rapp_3_1-outer,
-div#applications-rapp_3_2-outer,
-div#applications-rapp_3_3-outer,
-div#applications-rapp_3_4-outer,
-div#applications-rapp_3_5-outer,
-div#applications-rapp_3_6-outer		{ grid-column: 3 / 4; }
+form#applications label#applications-teleconfDate-label	{ grid-row: 7; grid-column: 6 / 8; text-align: right; padding-right: .5em; }
+form#applications div#applications-teleconfDate-outer	{ grid-row: 7; grid-column: 8 / 9; }
 
-div#applications-rc_2_1-outer,
-div#applications-rc_2_2-outer,
-div#applications-rc_2_3-outer,
-div#applications-rc_2_4-outer,
-div#applications-rc_2_5-outer,
-div#applications-rc_2_6-outer,
-div#applications-rc_2_7-outer,
-div#applications-rc_3_1-outer,
-div#applications-rc_3_2-outer,
-div#applications-rc_3_3-outer,
-div#applications-rc_3_4-outer,
-div#applications-rc_3_5-outer,
-div#applications-rc_3_6-outer		{ grid-column: 4 / 5; }
+form#applications div#applications-rapporteur1-outer,
+form#applications div#applications-rapporteur3-outer	{ grid-column: 3 / 5; }
 
-div#applications-panel_2_1-outer,
-div#applications-rapp_2_1-outer,
-div#applications-rc_2_1-outer		{ grid-row: 10; }
+form#applications div#applications-rapporteur2-outer	{ grid-column: 5 / 8; }
 
-div#applications-panel_2_2-outer,
-div#applications-rapp_2_2-outer,
-div#applications-rc_2_2-outer		{ grid-row: 11; }
+form#applications label#applications-panel_2_1-label,
+form#applications label#applications-panel_2_2-label,
+form#applications label#applications-panel_2_3-label,
+form#applications label#applications-panel_2_4-label,
+form#applications label#applications-panel_2_5-label,
+form#applications label#applications-panel_2_6-label,
+form#applications label#applications-panel_2_7-label,
+form#applications label#applications-panel_3_1-label,
+form#applications label#applications-panel_3_2-label,
+form#applications label#applications-panel_3_3-label,
+form#applications label#applications-panel_3_4-label,
+form#applications label#applications-panel_3_5-label,
+form#applications label#applications-panel_3_6-label		{ grid-column: 1 / 2; visibility: hidden; white-space: nowrap; }
 
-div#applications-panel_2_3-outer,
-div#applications-rapp_2_3-outer,
-div#applications-rc_2_3-outer		{ grid-row: 12; }
+form#applications label#applications-panel_2_1-label::before	{ content: 'ESG 2.1'; visibility: visible; }
+form#applications label#applications-panel_2_2-label::before	{ content: 'ESG 2.2'; visibility: visible; }
+form#applications label#applications-panel_2_3-label::before	{ content: 'ESG 2.3'; visibility: visible; }
+form#applications label#applications-panel_2_4-label::before	{ content: 'ESG 2.4'; visibility: visible; }
+form#applications label#applications-panel_2_5-label::before	{ content: 'ESG 2.5'; visibility: visible; }
+form#applications label#applications-panel_2_6-label::before	{ content: 'ESG 2.6'; visibility: visible; }
+form#applications label#applications-panel_2_7-label::before	{ content: 'ESG 2.7'; visibility: visible; }
+form#applications label#applications-panel_3_1-label::before	{ content: 'ESG 3.1'; visibility: visible; }
+form#applications label#applications-panel_3_2-label::before	{ content: 'ESG 3.2'; visibility: visible; }
+form#applications label#applications-panel_3_3-label::before	{ content: 'ESG 3.3'; visibility: visible; }
+form#applications label#applications-panel_3_4-label::before	{ content: 'ESG 3.4'; visibility: visible; }
+form#applications label#applications-panel_3_5-label::before	{ content: 'ESG 3.5'; visibility: visible; }
+form#applications label#applications-panel_3_6-label::before	{ content: 'ESG 3.6'; visibility: visible; }
 
-div#applications-panel_2_4-outer,
-div#applications-rapp_2_4-outer,
-div#applications-rc_2_4-outer		{ grid-row: 13; }
+form#applications div#applications-inherit_2_1-outer,
+form#applications div#applications-inherit_2_2-outer,
+form#applications div#applications-inherit_2_3-outer,
+form#applications div#applications-inherit_2_4-outer,
+form#applications div#applications-inherit_2_5-outer,
+form#applications div#applications-inherit_2_6-outer,
+form#applications div#applications-inherit_2_7-outer,
+form#applications div#applications-inherit_3_1-outer,
+form#applications div#applications-inherit_3_2-outer,
+form#applications div#applications-inherit_3_3-outer,
+form#applications div#applications-inherit_3_4-outer,
+form#applications div#applications-inherit_3_5-outer,
+form#applications div#applications-inherit_3_6-outer	{ grid-column: 2 / 3; }
 
-div#applications-panel_2_5-outer,
-div#applications-rapp_2_5-outer,
-div#applications-rc_2_5-outer		{ grid-row: 14; }
+form#applications div#applications-inherit_2_1-outer::before,
+form#applications div#applications-inherit_2_2-outer::before,
+form#applications div#applications-inherit_2_3-outer::before,
+form#applications div#applications-inherit_2_4-outer::before,
+form#applications div#applications-inherit_2_5-outer::before,
+form#applications div#applications-inherit_2_6-outer::before,
+form#applications div#applications-inherit_2_7-outer::before,
+form#applications div#applications-inherit_3_1-outer::before,
+form#applications div#applications-inherit_3_2-outer::before,
+form#applications div#applications-inherit_3_3-outer::before,
+form#applications div#applications-inherit_3_4-outer::before,
+form#applications div#applications-inherit_3_5-outer::before,
+form#applications div#applications-inherit_3_6-outer::before	{ content: 'Inherit'; }
 
-div#applications-panel_2_6-outer,
-div#applications-rapp_2_6-outer,
-div#applications-rc_2_6-outer		{ grid-row: 15; }
+form#applications div#applications-panel_2_1-outer,
+form#applications div#applications-panel_2_2-outer,
+form#applications div#applications-panel_2_3-outer,
+form#applications div#applications-panel_2_4-outer,
+form#applications div#applications-panel_2_5-outer,
+form#applications div#applications-panel_2_6-outer,
+form#applications div#applications-panel_2_7-outer,
+form#applications div#applications-panel_3_1-outer,
+form#applications div#applications-panel_3_2-outer,
+form#applications div#applications-panel_3_3-outer,
+form#applications div#applications-panel_3_4-outer,
+form#applications div#applications-panel_3_5-outer,
+form#applications div#applications-panel_3_6-outer		{ grid-column: 3 / 5; }
 
-div#applications-panel_2_7-outer,
-div#applications-rapp_2_7-outer,
-div#applications-rc_2_7-outer		{ grid-row: 16; }
+form#applications label#applications-panel_2_1-label,
+form#applications div#applications-inherit_2_1-outer		{ margin-top: auto; }
 
-div#applications-panel_3_1-outer,
-div#applications-rapp_3_1-outer,
-div#applications-rc_3_1-outer		{ grid-row: 17; }
+form#applications div#applications-rapp_2_1-outer,
+form#applications div#applications-rapp_2_2-outer,
+form#applications div#applications-rapp_2_3-outer,
+form#applications div#applications-rapp_2_4-outer,
+form#applications div#applications-rapp_2_5-outer,
+form#applications div#applications-rapp_2_6-outer,
+form#applications div#applications-rapp_2_7-outer,
+form#applications div#applications-rapp_3_1-outer,
+form#applications div#applications-rapp_3_2-outer,
+form#applications div#applications-rapp_3_3-outer,
+form#applications div#applications-rapp_3_4-outer,
+form#applications div#applications-rapp_3_5-outer,
+form#applications div#applications-rapp_3_6-outer		{ grid-column: 5 / 7; }
 
-div#applications-panel_3_2-outer,
-div#applications-rapp_3_2-outer,
-div#applications-rc_3_2-outer		{ grid-row: 18; }
+form#applications div#applications-rc_2_1-outer,
+form#applications div#applications-rc_2_2-outer,
+form#applications div#applications-rc_2_3-outer,
+form#applications div#applications-rc_2_4-outer,
+form#applications div#applications-rc_2_5-outer,
+form#applications div#applications-rc_2_6-outer,
+form#applications div#applications-rc_2_7-outer,
+form#applications div#applications-rc_3_1-outer,
+form#applications div#applications-rc_3_2-outer,
+form#applications div#applications-rc_3_3-outer,
+form#applications div#applications-rc_3_4-outer,
+form#applications div#applications-rc_3_5-outer,
+form#applications div#applications-rc_3_6-outer		{ grid-column: 7 / 9; }
 
-div#applications-panel_3_3-outer,
-div#applications-rapp_3_3-outer,
-div#applications-rc_3_3-outer		{ grid-row: 19; }
+form#applications div#applications-panel_2_1-outer::before,
+form#applications div#applications-rapp_2_1-outer::before,
+form#applications div#applications-rc_2_1-outer::before {
+	display: block;
+	padding: 0 0 5px 10px;
+	text-decoration: underline;
+}
+form#applications div#applications-panel_2_1-outer::before	{ content: 'Panel'; }
+form#applications div#applications-rapp_2_1-outer::before	{ content: 'Rapporteurs'; }
+form#applications div#applications-rc_2_1-outer::before		{ content: 'RC'; }
 
-div#applications-panel_3_4-outer,
-div#applications-rapp_3_4-outer,
-div#applications-rc_3_4-outer		{ grid-row: 20; }
+form#applications label#applications-panel_2_1-label,
+form#applications div#applications-inherit_2_1-outer,
+form#applications div#applications-panel_2_1-outer,
+form#applications div#applications-rapp_2_1-outer,
+form#applications div#applications-rc_2_1-outer		{ grid-row: 10; }
 
-div#applications-panel_3_5-outer,
-div#applications-rapp_3_5-outer,
-div#applications-rc_3_5-outer		{ grid-row: 21; }
+form#applications label#applications-panel_2_2-label,
+form#applications div#applications-inherit_2_2-outer,
+form#applications div#applications-panel_2_2-outer,
+form#applications div#applications-rapp_2_2-outer,
+form#applications div#applications-rc_2_2-outer		{ grid-row: 11; }
 
-div#applications-panel_3_6-outer,
-div#applications-rapp_3_6-outer,
-div#applications-rc_3_6-outer		{ grid-row: 22; }
+form#applications label#applications-panel_2_3-label,
+form#applications div#applications-inherit_2_3-outer,
+form#applications div#applications-panel_2_3-outer,
+form#applications div#applications-rapp_2_3-outer,
+form#applications div#applications-rc_2_3-outer		{ grid-row: 12; }
 
-label#applications-rapp_2_1-label,	label#applications-rc_2_1-label,
-label#applications-rapp_2_2-label,	label#applications-rc_2_2-label,
-label#applications-rapp_2_3-label,	label#applications-rc_2_3-label,
-label#applications-rapp_2_4-label,	label#applications-rc_2_4-label,
-label#applications-rapp_2_5-label,	label#applications-rc_2_5-label,
-label#applications-rapp_2_6-label,	label#applications-rc_2_6-label,
-label#applications-rapp_2_7-label,	label#applications-rc_2_7-label,
-label#applications-rapp_3_1-label,	label#applications-rc_3_1-label,
-label#applications-rapp_3_2-label,	label#applications-rc_3_2-label,
-label#applications-rapp_3_3-label,	label#applications-rc_3_3-label,
-label#applications-rapp_3_4-label,	label#applications-rc_3_4-label,
-label#applications-rapp_3_5-label,	label#applications-rc_3_5-label,
-label#applications-rapp_3_6-label,	label#applications-rc_3_6-label		{ display: none; }
+form#applications label#applications-panel_2_4-label,
+form#applications div#applications-inherit_2_4-outer,
+form#applications div#applications-panel_2_4-outer,
+form#applications div#applications-rapp_2_4-outer,
+form#applications div#applications-rc_2_4-outer		{ grid-row: 13; }
 
-label#applications-result-label		{ grid-row: 23; }
-div#applications-result-outer		{ grid-row: 23; grid-column: 2 / 3; }
-label#applications-decisionDate-label	{ grid-row: 23; grid-column: 3 / 4; }
-div#applications-decisionDate-outer	{ grid-row: 23; grid-column: 4 / 5; }
+form#applications label#applications-panel_2_5-label,
+form#applications div#applications-inherit_2_5-outer,
+form#applications div#applications-panel_2_5-outer,
+form#applications div#applications-rapp_2_5-outer,
+form#applications div#applications-rc_2_5-outer		{ grid-row: 14; }
+
+form#applications label#applications-panel_2_6-label,
+form#applications div#applications-inherit_2_6-outer,
+form#applications div#applications-panel_2_6-outer,
+form#applications div#applications-rapp_2_6-outer,
+form#applications div#applications-rc_2_6-outer		{ grid-row: 15; }
+
+form#applications label#applications-panel_2_7-label,
+form#applications div#applications-inherit_2_7-outer,
+form#applications div#applications-panel_2_7-outer,
+form#applications div#applications-rapp_2_7-outer,
+form#applications div#applications-rc_2_7-outer		{ grid-row: 16; }
+
+form#applications label#applications-panel_3_1-label,
+form#applications div#applications-inherit_3_1-outer,
+form#applications div#applications-panel_3_1-outer,
+form#applications div#applications-rapp_3_1-outer,
+form#applications div#applications-rc_3_1-outer		{ grid-row: 17; }
+
+form#applications label#applications-panel_3_2-label,
+form#applications div#applications-inherit_3_2-outer,
+form#applications div#applications-panel_3_2-outer,
+form#applications div#applications-rapp_3_2-outer,
+form#applications div#applications-rc_3_2-outer		{ grid-row: 18; }
+
+form#applications label#applications-panel_3_3-label,
+form#applications div#applications-inherit_3_3-outer,
+form#applications div#applications-panel_3_3-outer,
+form#applications div#applications-rapp_3_3-outer,
+form#applications div#applications-rc_3_3-outer		{ grid-row: 19; }
+
+form#applications label#applications-panel_3_4-label,
+form#applications div#applications-inherit_3_4-outer,
+form#applications div#applications-panel_3_4-outer,
+form#applications div#applications-rapp_3_4-outer,
+form#applications div#applications-rc_3_4-outer		{ grid-row: 20; }
+
+form#applications label#applications-panel_3_5-label,
+form#applications div#applications-inherit_3_5-outer,
+form#applications div#applications-panel_3_5-outer,
+form#applications div#applications-rapp_3_5-outer,
+form#applications div#applications-rc_3_5-outer		{ grid-row: 21; }
+
+form#applications label#applications-panel_3_6-label,
+form#applications div#applications-inherit_3_6-outer,
+form#applications div#applications-panel_3_6-outer,
+form#applications div#applications-rapp_3_6-outer,
+form#applications div#applications-rc_3_6-outer		{ grid-row: 22; }
+
+form#applications label#applications-rapp_2_1-label,	form#applications label#applications-rc_2_1-label,	form#applications label#applications-inherit_2_1-label,
+form#applications label#applications-rapp_2_2-label,	form#applications label#applications-rc_2_2-label,	form#applications label#applications-inherit_2_2-label,
+form#applications label#applications-rapp_2_3-label,	form#applications label#applications-rc_2_3-label,	form#applications label#applications-inherit_2_3-label,
+form#applications label#applications-rapp_2_4-label,	form#applications label#applications-rc_2_4-label,	form#applications label#applications-inherit_2_4-label,
+form#applications label#applications-rapp_2_5-label,	form#applications label#applications-rc_2_5-label,	form#applications label#applications-inherit_2_5-label,
+form#applications label#applications-rapp_2_6-label,	form#applications label#applications-rc_2_6-label,	form#applications label#applications-inherit_2_6-label,
+form#applications label#applications-rapp_2_7-label,	form#applications label#applications-rc_2_7-label,	form#applications label#applications-inherit_2_7-label,
+form#applications label#applications-rapp_3_1-label,	form#applications label#applications-rc_3_1-label,	form#applications label#applications-inherit_3_1-label,
+form#applications label#applications-rapp_3_2-label,	form#applications label#applications-rc_3_2-label,	form#applications label#applications-inherit_3_2-label,
+form#applications label#applications-rapp_3_3-label,	form#applications label#applications-rc_3_3-label,	form#applications label#applications-inherit_3_3-label,
+form#applications label#applications-rapp_3_4-label,	form#applications label#applications-rc_3_4-label,	form#applications label#applications-inherit_3_4-label,
+form#applications label#applications-rapp_3_5-label,	form#applications label#applications-rc_3_5-label,	form#applications label#applications-inherit_3_5-label,
+form#applications label#applications-rapp_3_6-label,	form#applications label#applications-rc_3_6-label,	form#applications label#applications-inherit_3_6-label {
+	display: none;
+}
+
+form#applications label#applications-result-label	{ grid-row: 23; }
+form#applications div#applications-result-outer		{ grid-row: 23; grid-column: 3 / 5; }
+form#applications label#applications-decisionDate-label	{ grid-row: 23; grid-column: 5 / 7; }
+form#applications div#applications-decisionDate-outer	{ grid-row: 23; grid-column: 7 / 9; }
+
+form#applications label#applications-previous-label	{ grid-row: 24; }
+form#applications div#applications-previous-outer	{ grid-row: 24; }
 
 /************************************** TABLEs applications & changeReport **********************/
 
-div#applications-rapporteur1-outer,
-div#applications-rapporteur3-outer,
 div#changeReport-rapporteur1-outer,
 div#complaint-rapporteur1-outer		{ grid-column: 2 / 3; }
 
@@ -230,7 +341,6 @@ label#applications-rapporteur2-label,
 label#changeReport-rapporteur2-label,
 label#complaint-rapporteur2-label	{ display: none; }
 
-div#applications-rapporteur2-outer,
 div#changeReport-rapporteur2-outer,
 div#complaint-rapporteur2-outer		{ grid-column: 3 / 4; }
 
