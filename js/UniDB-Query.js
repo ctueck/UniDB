@@ -501,8 +501,10 @@ class Query {
                                     } else {
                                         prefix = '';
                                     }
-                                    for (var i in input) {
-                                        if (typeof(input[i]) == 'object') {
+                                    for (var i of Object.keys(input)) {
+                                        if (input[i] === null) {
+                                            output[prefix + i] = null;
+                                        } else if (typeof(input[i]) == 'object') {
                                             Object.assign(output, flatten(input[i], prefix + i));
                                         } else {
                                             output[prefix + i] = input[i];
@@ -515,7 +517,7 @@ class Query {
                                 var metaOld = new Array;
                                 for(var i = 0; i < metaNodes.length; i++) {
                                     var metaName = metaNodes[i].getAttributeNS(NS_ODF_META, "name");
-                                    if (typeof record[metaName] != "undefined") {
+                                    if (record.hasOwnProperty(metaName)) {
                                         metaOld.push(metaNodes[i]);
                                     } else if (!metaName.startsWith("title_esg") && !metaName.startsWith("_")) {
                                         // mark unknown/old fields used - ESG titles ignored, underscore can be used for other fields
@@ -526,7 +528,7 @@ class Query {
                                     metaContainer.removeChild(metaOld[i]);
                                 }
                                 var metaPrefix = metaContainer.lookupPrefix(NS_ODF_META);
-                                for(var metaName in record) {
+                                for(var metaName of Object.keys(record)) {
                                     var metaNew = document.createElementNS(NS_ODF_META, metaPrefix + ":user-defined");
                                     metaNew.textContent = record[metaName];
                                     metaNew.setAttributeNS(NS_ODF_META, metaPrefix + ":name", metaName);
