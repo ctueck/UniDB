@@ -249,12 +249,14 @@ Field.prototype.render = function(target) {
 			.button({ text: false, icons: { primary: "ui-icon-folder-open" }})
 			.click( { T: this.R.T, relatedColumn: this.name, value: this.oldValue }, this.R.T.relatedFunction )
 			.appendTo(this.outerDiv);
-		$("<a/>", { text: (this.R.T.allowEdit ? "Edit" : "View" ),  "class": "foreign-table-button" } )
-			.button({ text: false, icons: { primary: (this.R.T.allowEdit ? "ui-icon-pencil" : "ui-icon-search") }})
-			.click(	{	T:	this.R.T.D.T(this.foreign_table),
-					value:	this.oldValue,
-					key:	this.foreign_key } , this.R.T.D.T(this.foreign_table).editFunction )
-			.appendTo(this.outerDiv);
+		if (this.R.T.D.T(this.foreign_table)) {
+			$("<a/>", { text: (this.R.T.allowEdit ? "Edit" : "View" ),  "class": "foreign-table-button" } )
+				.button({ text: false, icons: { primary: (this.R.T.allowEdit ? "ui-icon-pencil" : "ui-icon-search") }})
+				.click(	{	T:	this.R.T.D.T(this.foreign_table),
+						value:	this.oldValue,
+						key:	this.foreign_key } , this.R.T.D.T(this.foreign_table).editFunction )
+				.appendTo(this.outerDiv);
+		}
 	}
 
     // create an element to show field errors
