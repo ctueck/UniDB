@@ -208,36 +208,39 @@ class Query {
                         T.sortFunction )
                     .appendTo(header);
                 // filter drop down
-                if (data.facets && data.facets[column]) {
+                if (data.facets && (data.facets[column] || data.facets[column + '__isnull'])) {
+                    var parameter = (data.facets[column] ? column : column + '__isnull');
+                    var reverse = (parameter == column + '__isnull' ? true : false);
+                    var facet = data.facets[parameter];
                     var filterOuter = $("<div/>", { "class": "filter-outer" } );
                     $("<span/>", { "class": "filter-button" })
-                        .on("click", { T: T, column: column }, T.unfilterFunction)
+                        .on("click", { T: T, column: parameter }, T.unfilterFunction)
                         .appendTo(filterOuter);
                     var filter = $("<select/>", { "class": "filter-select" });
                     $("<option/>", { value: undefined, text: '[all]' }).appendTo(filter);
-                    for (var o=0; o < data.facets[column].length; o++) {
+                    for (var o=0; o < facet.length; o++) {
                         var label =
-                            ( data.facets[column][o][0] === null
+                            ( facet[o][0] === null
                             ? "[not assigned]"
-                            :   ( data.facets[column][o][2]
-                                    ? data.facets[column][o][2]
-                                    :   ( typeof data.facets[column][o][0] == "boolean"
-                                        ? ( data.facets[column][o][0] ? "Yes" : "No" )
-                                        : data.facets[column][o][0]
+                            :   ( facet[o][2]
+                                    ? facet[o][2]
+                                    :   ( typeof facet[o][0] == "boolean"
+                                        ? ( ( reverse ? ! facet[o][0] : facet[o][0] ) ? "Yes" : "No" )
+                                        : facet[o][0]
                                         )
                                 )
                             );
                         var option = $("<option/>", {
-                                value:    data.facets[column][o][0] === null ? 'NULL' : data.facets[column][o][0],
-                                 text:    T.D.stripText(label, false) + " (" + data.facets[column][o][1] + ")",
+                                value:    facet[o][0] === null ? 'NULL' : facet[o][0],
+                                 text:    T.D.stripText(label, false) + " (" + facet[o][1] + ")",
                                  title:    label
                         });
-                        if ( T.options[column] !== undefined && (
-                                T.options[column] == data.facets[column][o][0]
-                             || ( T.options[column] == 'NULL' && data.facets[column][o][0] === null)
-                             || ( typeof data.facets[column][o][0] == "boolean" && (
-                                    (T.options[column] == "true" && data.facets[column][o][0])
-                                 || (T.options[column] == "false" && ! data.facets[column][o][0])
+                        if ( T.options[parameter] !== undefined && (
+                                T.options[parameter] == facet[o][0]
+                             || ( T.options[parameter] == 'NULL' && facet[o][0] === null)
+                             || ( typeof facet[o][0] == "boolean" && (
+                                    (T.options[parameter] == "true" && facet[o][0])
+                                 || (T.options[parameter] == "false" && ! facet[o][0])
                                 ) )
                             ) ) {
                             option.prop("selected","selected");
@@ -246,7 +249,7 @@ class Query {
                         }
                         option.appendTo(filter);
                     }
-                    filter.on("change", { T: T, column: column }, T.filterFunction);
+                    filter.on("change", { T: T, column: parameter }, T.filterFunction);
                     filter.appendTo(filterOuter);
                     filterOuter.appendTo(header2);
                 }
