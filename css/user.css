@@ -104,14 +104,10 @@ form#applications div#applications-stage-outer		{ grid-row: 4; grid-column: 3 / 
 form#applications label#applications-reportExpected-label	{ grid-row: 4; grid-column: 6 / 8; text-align: right; padding-right: .5em; }
 form#applications div#applications-reportExpected-outer		{ grid-row: 4; grid-column: 8 / 9; }
 
-form#applications label#applications-reportDate-label	{ grid-row: 5; }
-form#applications div#applications-reportDate-outer	{ grid-row: 5; grid-column: 3 / 5; }
+form#applications div#applications-reportDate-outer	{ grid-column: 3 / 5; }
 
-form#applications label#applications-reportSubmitted-label	{ grid-row: 5; grid-column: 6 / 8; text-align: right; padding-right: .5em; }
-form#applications div#applications-reportSubmitted-outer	{ grid-row: 5; grid-column: 8 / 9; }
-
-form#applications label#applications-teleconfDate-label	{ grid-row: 7; grid-column: 6 / 8; text-align: right; padding-right: .5em; }
-form#applications div#applications-teleconfDate-outer	{ grid-row: 7; grid-column: 8 / 9; }
+form#applications label#applications-reportSubmitted-label	{ grid-column: 6 / 8; text-align: right; padding-right: .5em; }
+form#applications div#applications-reportSubmitted-outer	{ grid-column: 8 / 9; }
 
 form#applications div#applications-rapporteur1-outer,
 form#applications div#applications-rapporteur3-outer	{ grid-column: 3 / 5; }
